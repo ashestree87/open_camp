@@ -28,14 +28,14 @@ id = "1d71185473a542bfbd371349deef88ed"  # open-camp-kv
 
 # Environment variables
 [vars]
-ALLOWED_ORIGIN = "https://open-camp.pages.dev"  # Update with your actual Pages domain after deployment
+ALLOWED_ORIGIN = "https://camp.eighty7.uk"  # Update with your actual Pages domain after deployment
 
 # Secrets (set via wrangler secret put):
 # - RESEND_API_KEY: Your Resend API key for email notifications
 
 # Production environment
 [env.production]
-vars = { ALLOWED_ORIGIN = "https://open-camp.pages.dev" }
+vars = { ALLOWED_ORIGIN = "https://camp.eighty7.uk" }
 
 # Development environment
 [env.development]
