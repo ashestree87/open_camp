@@ -1,5 +1,5 @@
 // ============================================================================
-// Open Camp - Kids Camp Registration - Cloudflare Worker
+// Open Camp - Enhanced Worker with Camps, Pricing & Stripe Integration
 // ============================================================================
 
 interface Env {
@@ -7,9 +7,42 @@ interface Env {
   KV: KVNamespace
   ALLOWED_ORIGIN?: string
   RESEND_API_KEY?: string
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
+}
+
+// Types
+interface Camp {
+  id?: number
+  name: string
+  description: string
+  start_date: string
+  end_date: string
+  age_min: number
+  age_max: number
+  max_spots: number
+  spots_taken?: number
+  status: 'active' | 'full' | 'archived'
+  created_at?: string
+  updated_at?: string
+}
+
+interface PricingItem {
+  id?: number
+  camp_id: number | null
+  name: string
+  description: string
+  amount: number
+  item_type: 'base_fee' | 'add_on' | 'discount'
+  is_required: boolean
+  is_active: boolean
+  display_order: number
+  created_at?: string
 }
 
 interface RegistrationData {
+  camp_id: number
+  selected_items: number[]
   email: string
   childFullName: string
   childAge: string
@@ -46,61 +79,32 @@ interface RegistrationData {
   permissionAppWaiver: boolean
 }
 
-// Resend API types
-interface ResendEmailRequest {
-  from: string
-  to: string | string[]
-  subject: string
-  text: string
-  html?: string
-}
-
-interface ResendEmailResponse {
-  id?: string
-  error?: {
-    message: string
-    name: string
-  }
-}
-
-// Club email for notifications - UPDATE THIS FOR YOUR ORGANIZATION
+// Constants
 const CLUB_EMAIL = 'camp@example.com'
 const FROM_EMAIL = 'Open Camp <noreply@example.com>'
 
-const DEFAULT_MAX_SPOTS = 20
-
-// ============================================================================
 // Helper Functions
-// ============================================================================
-
-// CORS headers
 function corsHeaders(origin: string | null, allowedOrigin?: string): HeadersInit {
   const allowed = allowedOrigin || '*'
   return {
     'Access-Control-Allow-Origin': origin && (allowed === '*' || origin.includes(allowed)) ? origin : allowed,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   }
 }
 
-// JSON response helper
 function jsonResponse(data: unknown, status = 200, headers: HeadersInit = {}): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...headers },
   })
 }
 
-// Error response helper
 function errorResponse(message: string, status = 400, headers: HeadersInit = {}): Response {
   return jsonResponse({ error: message, success: false }, status, headers)
 }
 
-// Hash password with SHA-256
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(password)
@@ -109,285 +113,394 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-// Verify auth token
 async function verifyAuth(request: Request, env: Env): Promise<boolean> {
   const authHeader = request.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return false
-  }
+  if (!authHeader?.startsWith('Bearer ')) return false
   
   const token = authHeader.substring(7)
   const storedHash = await env.KV.get('admin_password_hash')
-  
-  if (!storedHash) {
-    return false
-  }
+  if (!storedHash) return false
   
   const tokenHash = await hashPassword(token)
   return tokenHash === storedHash
 }
 
-// Get max spots from KV
-async function getMaxSpots(env: Env): Promise<number> {
-  const maxSpots = await env.KV.get('max_spots')
-  return maxSpots ? parseInt(maxSpots, 10) : DEFAULT_MAX_SPOTS
-}
-
-// Get registration count from D1
-async function getRegistrationCount(env: Env): Promise<number> {
-  const result = await env.DB.prepare('SELECT COUNT(*) as count FROM registrations').first<{ count: number }>()
-  return result?.count || 0
-}
-
 // ============================================================================
-// Email Functions (Resend API)
+// STRIPE INTEGRATION
 // ============================================================================
 
-async function sendEmail(
-  apiKey: string,
-  email: ResendEmailRequest
-): Promise<ResendEmailResponse> {
-  try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(email),
-    })
-
-    const data = await response.json() as ResendEmailResponse
-    
-    if (!response.ok) {
-      console.error('Resend API error:', data.error)
-      return { error: data.error }
-    }
-
-    return data
-  } catch (error) {
-    console.error('Failed to send email:', error)
-    return { error: { message: 'Failed to send email', name: 'SendError' } }
-  }
-}
-
-// Send confirmation email to parent
-async function sendParentConfirmationEmail(
-  apiKey: string,
-  data: RegistrationData
-): Promise<void> {
-  const emailContent = `
-Hello ${data.parentFullName},
-
-Thank you for registering ${data.childFullName} for Kids Camp!
-
-REGISTRATION DETAILS
---------------------
-Child: ${data.childFullName}
-Age: ${data.childAge || 'Not specified'}
-Date of Birth: ${data.childDob}
-
-Parent/Guardian: ${data.parentFullName}
-Email: ${data.email}
-Phone: ${data.phone}
-
-WHAT'S NEXT?
-------------
-1. You will receive payment details separately
-2. Please ensure your child wears comfortable clothing and trainers
-3. Bring a water bottle and packed lunch (if applicable)
-4. Arrive 10 minutes before the start time
-
-IMPORTANT INFORMATION
----------------------
-- Emergency Contact: ${data.emergency1Name} (${data.emergency1Phone})
-- Walk Home Alone: ${data.walkHomeAlone === 'yes' ? 'Yes' : 'No'}
-
-If you have any questions, please don't hesitate to contact us.
-
-See you at camp!
-
-Open Camp
---------------------
-This is an automated confirmation email. Please do not reply directly to this email.
-`.trim()
-
-  await sendEmail(apiKey, {
-    from: FROM_EMAIL,
-    to: data.email,
-    subject: `Registration Confirmed: ${data.childFullName} - Kids Camp`,
-    text: emailContent,
-  })
-}
-
-// Send notification email to club
-async function sendClubNotificationEmail(
-  apiKey: string,
-  data: RegistrationData,
-  registrationId: number | null
-): Promise<void> {
-  const medicalInfo = []
-  if (data.hasMedicalConditions === 'yes') {
-    medicalInfo.push(`Medical Conditions: ${data.medicalConditionsDetails}`)
-  }
-  if (data.hasAllergies === 'yes') {
-    medicalInfo.push(`Allergies: ${data.allergiesDetails}`)
-  }
-  if (data.hasMedication === 'yes') {
-    medicalInfo.push(`Medication: ${data.medicationDetails}`)
-  }
-  if (data.hasAdditionalNeeds === 'yes') {
-    medicalInfo.push(`Additional Needs: ${data.additionalNeedsDetails}`)
-  }
-
-  const emailContent = `
-NEW REGISTRATION RECEIVED
-=========================
-
-Registration ID: ${registrationId || 'N/A'}
-Date: ${new Date().toISOString()}
-
-CHILD INFORMATION
------------------
-Name: ${data.childFullName}
-Age: ${data.childAge || 'Not specified'}
-Date of Birth: ${data.childDob}
-
-PARENT/GUARDIAN
----------------
-Name: ${data.parentFullName}
-Email: ${data.email}
-Phone: ${data.phone}
-Address: ${data.address || 'Not provided'}
-
-EMERGENCY CONTACTS
-------------------
-Contact 1: ${data.emergency1Name} - ${data.emergency1Phone} (${data.emergency1Relationship})
-${data.emergency2Name ? `Contact 2: ${data.emergency2Name} - ${data.emergency2Phone} (${data.emergency2Relationship})` : ''}
-
-COLLECTION
-----------
-Walk Home Alone: ${data.walkHomeAlone === 'yes' ? 'YES' : 'NO'}
-Authorised Collectors: ${data.authorisedCollectors || 'None specified'}
-
-MEDICAL/HEALTH NOTES
---------------------
-${medicalInfo.length > 0 ? medicalInfo.join('\n') : 'No medical information flagged'}
-
-${data.hasFurtherInfo === 'yes' ? `Additional Info: ${data.furtherInfoDetails}` : ''}
-
----
-View all registrations in the admin dashboard.
-`.trim()
-
-  await sendEmail(apiKey, {
-    from: FROM_EMAIL,
-    to: CLUB_EMAIL,
-    subject: `New Registration: ${data.childFullName} (${data.parentFullName})`,
-    text: emailContent,
-  })
-}
-
-// Send all notification emails (non-blocking)
-async function sendRegistrationEmails(
+async function createStripePaymentIntent(
   env: Env,
-  data: RegistrationData,
-  registrationId: number | null
-): Promise<void> {
-  if (!env.RESEND_API_KEY) {
-    console.log('RESEND_API_KEY not configured, skipping emails')
-    return
+  amount: number,
+  currency: string,
+  metadata: Record<string, string>
+): Promise<any> {
+  if (!env.STRIPE_SECRET_KEY) {
+    throw new Error('Stripe not configured')
   }
 
-  // Send emails in parallel, don't await - fire and forget
-  // This ensures email failures don't block the response
-  Promise.allSettled([
-    sendParentConfirmationEmail(env.RESEND_API_KEY, data),
-    sendClubNotificationEmail(env.RESEND_API_KEY, data, registrationId),
-  ]).then(results => {
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        console.error(`Email ${index + 1} failed:`, result.reason)
-      }
-    })
+  const response = await fetch('https://api.stripe.com/v1/payment_intents', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      amount: Math.round(amount * 100).toString(), // Convert to cents
+      currency: currency,
+      'automatic_payment_methods[enabled]': 'true',
+      ...Object.entries(metadata).reduce((acc, [key, value]) => ({
+        ...acc,
+        [`metadata[${key}]`]: value
+      }), {})
+    }).toString(),
   })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(`Stripe error: ${error.error?.message || 'Unknown error'}`)
+  }
+
+  return response.json()
+}
+
+async function verifyStripeWebhook(
+  request: Request,
+  env: Env
+): Promise<any> {
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    throw new Error('Webhook secret not configured')
+  }
+
+  const signature = request.headers.get('stripe-signature')
+  if (!signature) {
+    throw new Error('No signature provided')
+  }
+
+  // For production, implement full webhook verification
+  // This is a simplified version
+  const payload = await request.json()
+  return payload
 }
 
 // ============================================================================
-// Route Handlers
+// CAMPS ENDPOINTS
 // ============================================================================
 
-// Handle GET /api/status
-async function handleStatus(env: Env, cors: HeadersInit): Promise<Response> {
+async function handleGetCamps(env: Env, cors: HeadersInit): Promise<Response> {
   try {
-    const maxSpots = await getMaxSpots(env)
-    const total = await getRegistrationCount(env)
-    const spotsLeft = Math.max(0, maxSpots - total)
+    const { results } = await env.DB.prepare(`
+      SELECT 
+        id, name, description, start_date, end_date,
+        age_min, age_max, max_spots, spots_taken, status,
+        created_at, updated_at
+      FROM camps 
+      WHERE status IN ('active', 'full')
+      ORDER BY start_date ASC
+    `).all()
+    
+    return jsonResponse({ success: true, camps: results }, 200, cors)
+  } catch (error) {
+    console.error('Get camps error:', error)
+    return errorResponse('Failed to fetch camps', 500, cors)
+  }
+}
+
+async function handleGetCamp(campId: string, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const camp = await env.DB.prepare(`
+      SELECT * FROM camps WHERE id = ?
+    `).bind(campId).first()
+    
+    if (!camp) {
+      return errorResponse('Camp not found', 404, cors)
+    }
+    
+    // Get pricing items for this camp
+    const { results: pricingItems } = await env.DB.prepare(`
+      SELECT * FROM pricing_items 
+      WHERE (camp_id = ? OR camp_id IS NULL) AND is_active = 1
+      ORDER BY display_order ASC
+    `).bind(campId).all()
     
     return jsonResponse({
-      spotsLeft,
-      total,
-      max: maxSpots,
-      isFull: spotsLeft === 0,
+      success: true,
+      camp,
+      pricingItems,
+      spotsRemaining: (camp.max_spots as number) - (camp.spots_taken as number || 0)
     }, 200, cors)
   } catch (error) {
-    console.error('Status error:', error)
-    return errorResponse('Failed to get status', 500, cors)
+    console.error('Get camp error:', error)
+    return errorResponse('Failed to fetch camp', 500, cors)
   }
 }
 
-// Handle POST /api/submit
+async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const data: Camp = await request.json()
+    
+    const result = await env.DB.prepare(`
+      INSERT INTO camps (
+        name, description, start_date, end_date, age_min, age_max, max_spots, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.name,
+      data.description || '',
+      data.start_date,
+      data.end_date,
+      data.age_min,
+      data.age_max,
+      data.max_spots,
+      data.status || 'active'
+    ).run()
+    
+    return jsonResponse({
+      success: true,
+      id: result.meta.last_row_id,
+      message: 'Camp created successfully'
+    }, 201, cors)
+  } catch (error) {
+    console.error('Create camp error:', error)
+    return errorResponse('Failed to create camp', 500, cors)
+  }
+}
+
+async function handleUpdateCamp(campId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const data: Partial<Camp> = await request.json()
+    
+    await env.DB.prepare(`
+      UPDATE camps 
+      SET name = ?, description = ?, start_date = ?, end_date = ?,
+          age_min = ?, age_max = ?, max_spots = ?, status = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(
+      data.name,
+      data.description,
+      data.start_date,
+      data.end_date,
+      data.age_min,
+      data.age_max,
+      data.max_spots,
+      data.status,
+      campId
+    ).run()
+    
+    return jsonResponse({ success: true, message: 'Camp updated successfully' }, 200, cors)
+  } catch (error) {
+    console.error('Update camp error:', error)
+    return errorResponse('Failed to update camp', 500, cors)
+  }
+}
+
+async function handleDeleteCamp(campId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    // Archive instead of delete
+    await env.DB.prepare(`
+      UPDATE camps SET status = 'archived', updated_at = datetime('now') WHERE id = ?
+    `).bind(campId).run()
+    
+    return jsonResponse({ success: true, message: 'Camp archived successfully' }, 200, cors)
+  } catch (error) {
+    console.error('Delete camp error:', error)
+    return errorResponse('Failed to archive camp', 500, cors)
+  }
+}
+
+// ============================================================================
+// PRICING ENDPOINTS
+// ============================================================================
+
+async function handleGetPricing(env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT p.*, c.name as camp_name
+      FROM pricing_items p
+      LEFT JOIN camps c ON p.camp_id = c.id
+      WHERE p.is_active = 1
+      ORDER BY p.display_order ASC
+    `).all()
+    
+    return jsonResponse({ success: true, items: results }, 200, cors)
+  } catch (error) {
+    console.error('Get pricing error:', error)
+    return errorResponse('Failed to fetch pricing', 500, cors)
+  }
+}
+
+async function handleCreatePricing(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const data: PricingItem = await request.json()
+    
+    const result = await env.DB.prepare(`
+      INSERT INTO pricing_items (
+        camp_id, name, description, amount, item_type, is_required, is_active, display_order
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.camp_id,
+      data.name,
+      data.description || '',
+      data.amount,
+      data.item_type,
+      data.is_required ? 1 : 0,
+      data.is_active ? 1 : 0,
+      data.display_order || 0
+    ).run()
+    
+    return jsonResponse({
+      success: true,
+      id: result.meta.last_row_id,
+      message: 'Pricing item created successfully'
+    }, 201, cors)
+  } catch (error) {
+    console.error('Create pricing error:', error)
+    return errorResponse('Failed to create pricing item', 500, cors)
+  }
+}
+
+async function handleUpdatePricing(itemId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const data: Partial<PricingItem> = await request.json()
+    
+    await env.DB.prepare(`
+      UPDATE pricing_items 
+      SET name = ?, description = ?, amount = ?, item_type = ?,
+          is_required = ?, is_active = ?, display_order = ?
+      WHERE id = ?
+    `).bind(
+      data.name,
+      data.description,
+      data.amount,
+      data.item_type,
+      data.is_required ? 1 : 0,
+      data.is_active ? 1 : 0,
+      data.display_order,
+      itemId
+    ).run()
+    
+    return jsonResponse({ success: true, message: 'Pricing item updated successfully' }, 200, cors)
+  } catch (error) {
+    console.error('Update pricing error:', error)
+    return errorResponse('Failed to update pricing item', 500, cors)
+  }
+}
+
+async function handleDeletePricing(itemId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    await env.DB.prepare(`DELETE FROM pricing_items WHERE id = ?`).bind(itemId).run()
+    
+    return jsonResponse({ success: true, message: 'Pricing item deleted successfully' }, 200, cors)
+  } catch (error) {
+    console.error('Delete pricing error:', error)
+    return errorResponse('Failed to delete pricing item', 500, cors)
+  }
+}
+
+// ============================================================================
+// PAYMENT INTENT ENDPOINT
+// ============================================================================
+
+async function handleCreatePaymentIntent(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const { campId, selectedItems, email, childName } = await request.json() as {
+      campId: number
+      selectedItems: number[]
+      email: string
+      childName: string
+    }
+    
+    // Calculate total amount
+    const placeholders = selectedItems.map(() => '?').join(',')
+    const { results } = await env.DB.prepare(`
+      SELECT id, name, amount FROM pricing_items WHERE id IN (${placeholders})
+    `).bind(...selectedItems).all()
+    
+    const totalAmount = (results as any[]).reduce((sum, item) => sum + item.amount, 0)
+    
+    // Create Stripe payment intent
+    const paymentIntent = await createStripePaymentIntent(env, totalAmount, 'gbp', {
+      camp_id: campId.toString(),
+      email: email,
+      child_name: childName,
+    })
+    
+    return jsonResponse({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      amount: totalAmount,
+      currency: 'gbp'
+    }, 200, cors)
+  } catch (error) {
+    console.error('Create payment intent error:', error)
+    return errorResponse(error instanceof Error ? error.message : 'Payment setup failed', 500, cors)
+  }
+}
+
+// ============================================================================
+// ENHANCED REGISTRATION SUBMISSION
+// ============================================================================
+
 async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
     const data: RegistrationData = await request.json()
     
     // Validate required fields
-    const required = [
-      'email', 'childFullName', 'childDob', 'parentFullName', 'phone',
-      'emergency1Name', 'emergency1Phone', 'emergency1Relationship',
-      'walkHomeAlone', 'hasMedicalConditions', 'hasAdditionalNeeds',
-      'hasAllergies', 'hasMedication', 'hasFurtherInfo'
-    ]
-    
-    for (const field of required) {
-      if (!data[field as keyof RegistrationData]) {
-        return errorResponse(`Missing required field: ${field}`, 400, cors)
-      }
+    if (!data.camp_id) {
+      return errorResponse('Camp selection required', 400, cors)
     }
     
-    // Validate email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(data.email)) {
-      return errorResponse('Invalid email address', 400, cors)
+    // Check camp capacity
+    const camp = await env.DB.prepare(`
+      SELECT id, max_spots, spots_taken, status FROM camps WHERE id = ?
+    `).bind(data.camp_id).first()
+    
+    if (!camp) {
+      return errorResponse('Camp not found', 404, cors)
     }
     
-    // Validate all permissions
-    const permissions = [
-      'permissionPhotos', 'permissionHealth', 'permissionActivities',
-      'permissionLocations', 'permissionMeals', 'permissionBathroom',
-      'permissionFirstAid', 'permissionEquipment', 'permissionAppWaiver'
-    ]
-    
-    for (const perm of permissions) {
-      if (!data[perm as keyof RegistrationData]) {
-        return errorResponse('All permissions must be accepted', 400, cors)
-      }
+    if (camp.status !== 'active') {
+      return errorResponse('Camp is not available for registration', 400, cors)
     }
     
-    // Check capacity
-    const maxSpots = await getMaxSpots(env)
-    const currentCount = await getRegistrationCount(env)
+    const spotsRemaining = (camp.max_spots as number) - (camp.spots_taken as number || 0)
+    if (spotsRemaining <= 0) {
+      return errorResponse('Camp is full', 400, cors)
+    }
     
-    if (currentCount >= maxSpots) {
-      return errorResponse('Registration is full. No spots available.', 400, cors)
+    // Calculate total amount
+    let totalAmount = 0
+    if (data.selected_items && data.selected_items.length > 0) {
+      const placeholders = data.selected_items.map(() => '?').join(',')
+      const { results } = await env.DB.prepare(`
+        SELECT SUM(amount) as total FROM pricing_items WHERE id IN (${placeholders})
+      `).bind(...data.selected_items).all()
+      totalAmount = (results[0] as any)?.total || 0
     }
     
     // Insert registration
-    const result = await env.DB.prepare(`
+    const regResult = await env.DB.prepare(`
       INSERT INTO registrations (
-        email, child_full_name, child_age, child_dob, parent_full_name,
-        address, phone,
-        emergency1_name, emergency1_phone, emergency1_relationship,
+        camp_id, email, child_full_name, child_age, child_dob, parent_full_name,
+        address, phone, emergency1_name, emergency1_phone, emergency1_relationship,
         emergency2_name, emergency2_phone, emergency2_relationship,
         authorised_collectors, walk_home_alone,
         has_medical_conditions, medical_conditions_details,
@@ -398,14 +511,15 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
         permission_photos, permission_health, permission_activities,
         permission_locations, permission_meals, permission_bathroom,
         permission_first_aid, permission_equipment, permission_app_waiver,
-        created_at
+        total_amount, payment_status, created_at
       ) VALUES (
-        ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-        ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20,
-        ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30,
-        ?31, ?32, ?33, ?34, datetime('now')
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, datetime('now')
       )
     `).bind(
+      data.camp_id,
       data.email,
       data.childFullName,
       data.childAge || '',
@@ -439,23 +553,39 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
       data.permissionBathroom ? 1 : 0,
       data.permissionFirstAid ? 1 : 0,
       data.permissionEquipment ? 1 : 0,
-      data.permissionAppWaiver ? 1 : 0
+      data.permissionAppWaiver ? 1 : 0,
+      totalAmount,
+      totalAmount > 0 ? 'pending' : 'paid'
     ).run()
     
-    const registrationId = result.meta.last_row_id
-    const newCount = currentCount + 1
-    const spotsLeft = Math.max(0, maxSpots - newCount)
+    const registrationId = regResult.meta.last_row_id
     
-    // Send notification emails (non-blocking - don't await)
-    // Emails are sent after successful DB insert, but failures don't affect the response
-    sendRegistrationEmails(env, data, registrationId)
+    // Insert registration items
+    if (data.selected_items && data.selected_items.length > 0) {
+      for (const itemId of data.selected_items) {
+        const item = await env.DB.prepare(`
+          SELECT amount FROM pricing_items WHERE id = ?
+        `).bind(itemId).first()
+        
+        if (item) {
+          await env.DB.prepare(`
+            INSERT INTO registration_items (registration_id, pricing_item_id, quantity, amount)
+            VALUES (?, ?, 1, ?)
+          `).bind(registrationId, itemId, item.amount).run()
+        }
+      }
+    }
+    
+    // Update camp spots
+    await env.DB.prepare(`
+      UPDATE camps SET spots_taken = spots_taken + 1 WHERE id = ?
+    `).bind(data.camp_id).run()
     
     return jsonResponse({
       success: true,
       id: registrationId,
-      spotsLeft,
-      total: newCount,
-      max: maxSpots,
+      totalAmount,
+      message: 'Registration successful'
     }, 201, cors)
   } catch (error) {
     console.error('Submit error:', error)
@@ -463,68 +593,10 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
   }
 }
 
-// Handle GET /api/registrations
-async function handleRegistrations(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
-  try {
-    const isAuthed = await verifyAuth(request, env)
-    if (!isAuthed) {
-      return errorResponse('Unauthorized', 401, cors)
-    }
-    
-    const { results } = await env.DB.prepare(`
-      SELECT 
-        id,
-        email,
-        child_full_name as childFullName,
-        child_age as childAge,
-        child_dob as childDob,
-        parent_full_name as parentFullName,
-        address,
-        phone,
-        emergency1_name as emergency1Name,
-        emergency1_phone as emergency1Phone,
-        emergency1_relationship as emergency1Relationship,
-        emergency2_name as emergency2Name,
-        emergency2_phone as emergency2Phone,
-        emergency2_relationship as emergency2Relationship,
-        authorised_collectors as authorisedCollectors,
-        walk_home_alone as walkHomeAlone,
-        has_medical_conditions as hasMedicalConditions,
-        medical_conditions_details as medicalConditionsDetails,
-        has_additional_needs as hasAdditionalNeeds,
-        additional_needs_details as additionalNeedsDetails,
-        has_allergies as hasAllergies,
-        allergies_details as allergiesDetails,
-        has_medication as hasMedication,
-        medication_details as medicationDetails,
-        has_further_info as hasFurtherInfo,
-        further_info_details as furtherInfoDetails,
-        permission_photos as permissionPhotos,
-        permission_health as permissionHealth,
-        permission_activities as permissionActivities,
-        permission_locations as permissionLocations,
-        permission_meals as permissionMeals,
-        permission_bathroom as permissionBathroom,
-        permission_first_aid as permissionFirstAid,
-        permission_equipment as permissionEquipment,
-        permission_app_waiver as permissionAppWaiver,
-        created_at as createdAt
-      FROM registrations 
-      ORDER BY created_at DESC
-    `).all()
-    
-    return jsonResponse({ 
-      success: true, 
-      registrations: results,
-      count: results.length,
-    }, 200, cors)
-  } catch (error) {
-    console.error('Registrations error:', error)
-    return errorResponse('Failed to fetch registrations', 500, cors)
-  }
-}
+// ============================================================================
+// AUTH & ADMIN ENDPOINTS
+// ============================================================================
 
-// Handle POST /api/auth
 async function handleAuth(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
     const { username, password } = await request.json() as { username: string; password: string }
@@ -533,13 +605,11 @@ async function handleAuth(request: Request, env: Env, cors: HeadersInit): Promis
       return errorResponse('Username and password required', 400, cors)
     }
     
-    // Check username (default: admin)
     const storedUsername = await env.KV.get('admin_username') || 'admin'
     if (username !== storedUsername) {
       return errorResponse('Invalid credentials', 401, cors)
     }
     
-    // Check password hash
     const storedHash = await env.KV.get('admin_password_hash')
     if (!storedHash) {
       return errorResponse('Admin not configured', 500, cors)
@@ -550,7 +620,6 @@ async function handleAuth(request: Request, env: Env, cors: HeadersInit): Promis
       return errorResponse('Invalid credentials', 401, cors)
     }
     
-    // Return the password as token (will be hashed on subsequent requests)
     return jsonResponse({
       success: true,
       token: password,
@@ -562,24 +631,47 @@ async function handleAuth(request: Request, env: Env, cors: HeadersInit): Promis
   }
 }
 
-// Handle GET /api/admin-config
+async function handleGetRegistrations(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const { results } = await env.DB.prepare(`
+      SELECT 
+        r.id, r.camp_id, r.email, r.child_full_name as childFullName,
+        r.child_age as childAge, r.child_dob as childDob,
+        r.parent_full_name as parentFullName, r.address, r.phone,
+        r.total_amount as totalAmount, r.payment_status as paymentStatus,
+        r.payment_reference as paymentReference, r.created_at as createdAt,
+        c.name as campName
+      FROM registrations r
+      LEFT JOIN camps c ON r.camp_id = c.id
+      ORDER BY r.created_at DESC
+    `).all()
+    
+    return jsonResponse({ 
+      success: true, 
+      registrations: results,
+      count: results.length,
+    }, 200, cors)
+  } catch (error) {
+    console.error('Get registrations error:', error)
+    return errorResponse('Failed to fetch registrations', 500, cors)
+  }
+}
+
 async function handleGetAdminConfig(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
     const isAuthed = await verifyAuth(request, env)
-    if (!isAuthed) {
-      return errorResponse('Unauthorized', 401, cors)
-    }
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
     
-    const maxSpots = await getMaxSpots(env)
-    const total = await getRegistrationCount(env)
+    const { results: camps } = await env.DB.prepare(`
+      SELECT id, name, max_spots, spots_taken FROM camps WHERE status = 'active'
+    `).all()
     
     return jsonResponse({
       success: true,
-      config: {
-        max_spots: maxSpots,
-        current_registrations: total,
-        spots_remaining: Math.max(0, maxSpots - total),
-      },
+      camps: camps || [],
     }, 200, cors)
   } catch (error) {
     console.error('Get admin config error:', error)
@@ -587,31 +679,15 @@ async function handleGetAdminConfig(request: Request, env: Env, cors: HeadersIni
   }
 }
 
-// Handle POST /api/admin-config
 async function handlePostAdminConfig(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
     const isAuthed = await verifyAuth(request, env)
-    if (!isAuthed) {
-      return errorResponse('Unauthorized', 401, cors)
-    }
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
     
-    const { max_spots } = await request.json() as { max_spots?: number }
-    
-    if (max_spots === undefined || typeof max_spots !== 'number' || max_spots < 0) {
-      return errorResponse('Invalid max_spots value', 400, cors)
-    }
-    
-    await env.KV.put('max_spots', max_spots.toString())
-    
-    const total = await getRegistrationCount(env)
-    
+    // This is now handled by camp-specific updates
     return jsonResponse({
       success: true,
-      config: {
-        max_spots,
-        current_registrations: total,
-        spots_remaining: Math.max(0, max_spots - total),
-      },
+      message: 'Use /api/camps/:id to update camp settings'
     }, 200, cors)
   } catch (error) {
     console.error('Post admin config error:', error)
@@ -619,8 +695,38 @@ async function handlePostAdminConfig(request: Request, env: Env, cors: HeadersIn
   }
 }
 
+async function handleLegacyStatus(env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    // Get first active camp for legacy compatibility
+    const camp = await env.DB.prepare(`
+      SELECT max_spots, spots_taken FROM camps WHERE status = 'active' LIMIT 1
+    `).first()
+    
+    if (!camp) {
+      return jsonResponse({
+        spotsLeft: 0,
+        total: 0,
+        max: 0,
+        isFull: true,
+      }, 200, cors)
+    }
+    
+    const spotsLeft = (camp.max_spots as number) - (camp.spots_taken as number || 0)
+    
+    return jsonResponse({
+      spotsLeft: Math.max(0, spotsLeft),
+      total: camp.spots_taken || 0,
+      max: camp.max_spots,
+      isFull: spotsLeft <= 0,
+    }, 200, cors)
+  } catch (error) {
+    console.error('Legacy status error:', error)
+    return errorResponse('Failed to get status', 500, cors)
+  }
+}
+
 // ============================================================================
-// Main Fetch Handler
+// MAIN ROUTER
 // ============================================================================
 
 export default {
@@ -631,38 +737,80 @@ export default {
     const origin = request.headers.get('Origin')
     const cors = corsHeaders(origin, env.ALLOWED_ORIGIN)
     
-    // Handle CORS preflight
     if (method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors })
     }
     
     try {
-      // Route handlers
-      if (path === '/api/status' && method === 'GET') {
-        return handleStatus(env, cors)
+      // Camps endpoints
+      if (path === '/api/camps' && method === 'GET') {
+        return handleGetCamps(env, cors)
+      }
+      if (path.match(/^\/api\/camps\/\d+$/) && method === 'GET') {
+        const campId = path.split('/')[3]
+        return handleGetCamp(campId, env, cors)
+      }
+      if (path === '/api/camps' && method === 'POST') {
+        return handleCreateCamp(request, env, cors)
+      }
+      if (path.match(/^\/api\/camps\/\d+$/) && method === 'PUT') {
+        const campId = path.split('/')[3]
+        return handleUpdateCamp(campId, request, env, cors)
+      }
+      if (path.match(/^\/api\/camps\/\d+$/) && method === 'DELETE') {
+        const campId = path.split('/')[3]
+        return handleDeleteCamp(campId, request, env, cors)
       }
       
+      // Pricing endpoints
+      if (path === '/api/pricing' && method === 'GET') {
+        return handleGetPricing(env, cors)
+      }
+      if (path === '/api/pricing' && method === 'POST') {
+        return handleCreatePricing(request, env, cors)
+      }
+      if (path.match(/^\/api\/pricing\/\d+$/) && method === 'PUT') {
+        const itemId = path.split('/')[3]
+        return handleUpdatePricing(itemId, request, env, cors)
+      }
+      if (path.match(/^\/api\/pricing\/\d+$/) && method === 'DELETE') {
+        const itemId = path.split('/')[3]
+        return handleDeletePricing(itemId, request, env, cors)
+      }
+      
+      // Payment endpoint
+      if (path === '/api/create-payment-intent' && method === 'POST') {
+        return handleCreatePaymentIntent(request, env, cors)
+      }
+      
+      // Registration submission
       if (path === '/api/submit' && method === 'POST') {
         return handleSubmit(request, env, cors)
       }
       
-      if (path === '/api/registrations' && method === 'GET') {
-        return handleRegistrations(request, env, cors)
-      }
-      
+      // Auth endpoints
       if (path === '/api/auth' && method === 'POST') {
         return handleAuth(request, env, cors)
       }
       
+      // Registrations endpoint
+      if (path === '/api/registrations' && method === 'GET') {
+        return handleGetRegistrations(request, env, cors)
+      }
+      
+      // Admin config endpoints  
       if (path === '/api/admin-config' && method === 'GET') {
         return handleGetAdminConfig(request, env, cors)
       }
-      
       if (path === '/api/admin-config' && method === 'POST') {
         return handlePostAdminConfig(request, env, cors)
       }
       
-      // 404 for unknown routes
+      // Legacy status endpoint (for old single-camp mode)
+      if (path === '/api/status' && method === 'GET') {
+        return handleLegacyStatus(env, cors)
+      }
+      
       return errorResponse('Not found', 404, cors)
     } catch (error) {
       console.error('Unhandled error:', error)
@@ -670,3 +818,4 @@ export default {
     }
   },
 }
+
