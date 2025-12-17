@@ -4,6 +4,7 @@
 name = "open-camp"
 main = "src/worker.ts"
 compatibility_date = "2024-01-01"
+account_id = "dcdd49ae1196504c4cb909eeab9ed21c"
 
 # For Pages deployment (comment out 'main' above and use this instead)
 # pages_build_output_dir = "dist"
@@ -12,12 +13,12 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "open-camp-db"
-database_id = "YOUR_DATABASE_ID_HERE"  # Replace after running: wrangler d1 create open-camp-db
+database_id = "0250cf54-932d-416e-8456-3a666c1e167e"
 
 # KV Namespace binding
 [[kv_namespaces]]
 binding = "KV"
-id = "YOUR_KV_NAMESPACE_ID_HERE"  # Replace after running: wrangler kv:namespace create KV
+id = "1d71185473a542bfbd371349deef88ed"  # open-camp-kv
 
 # Preview KV Namespace (for local development)
 # [[kv_namespaces]]
@@ -27,7 +28,7 @@ id = "YOUR_KV_NAMESPACE_ID_HERE"  # Replace after running: wrangler kv:namespace
 
 # Environment variables
 [vars]
-ALLOWED_ORIGIN = "https://your-domain.pages.dev"  # Update with your Pages domain
+ALLOWED_ORIGIN = "https://open-camp.pages.dev"  # Update with your actual Pages domain after deployment
 
 # Secrets (set via wrangler secret put):
 # - RESEND_API_KEY: Your Resend API key for email notifications
@@ -39,3 +40,10 @@ vars = { ALLOWED_ORIGIN = "https://open-camp.pages.dev" }
 # Development environment
 [env.development]
 vars = { ALLOWED_ORIGIN = "*" }
+
+# Pages Functions Configuration
+# Note: Pages Functions inherit bindings from the project settings in Cloudflare Dashboard
+# The bindings configured above (D1 and KV) need to be added to the Pages project:
+# Go to: Cloudflare Dashboard > Pages > open-camp > Settings > Functions
+# Add D1 binding: DB -> open-camp-db (0250cf54-932d-416e-8456-3a666c1e167e)
+# Add KV binding: KV -> open-camp-kv (1d71185473a542bfbd371349deef88ed)
