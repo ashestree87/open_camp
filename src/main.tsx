@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
-import RegistrationForm from './pages/RegistrationForm'
-import Admin from './pages/Admin'
+import RegistrationFormEnhanced from './pages/RegistrationFormEnhanced'
+import AdminEnhanced from './pages/AdminEnhanced'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -13,8 +13,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<RegistrationForm />} />
-            <Route path="admin" element={<Admin />} />
+            <Route index element={<RegistrationFormEnhanced />} />
+            <Route path="camp/:campId" element={<RegistrationFormEnhanced />} />
+            <Route path="admin" element={<AdminEnhanced />} />
           </Route>
         </Routes>
       </BrowserRouter>

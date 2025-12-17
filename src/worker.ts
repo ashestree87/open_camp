@@ -115,14 +115,63 @@ async function hashPassword(password: string): Promise<string> {
 
 async function verifyAuth(request: Request, env: Env): Promise<boolean> {
   const authHeader = request.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) return false
+  console.log('Auth header present:', !!authHeader)
+  if (!authHeader?.startsWith('Bearer ')) {
+    console.log('No Bearer token found')
+    return false
+  }
   
   const token = authHeader.substring(7)
+  console.log('Token length:', token?.length)
+  
   const storedHash = await env.KV.get('admin_password_hash')
-  if (!storedHash) return false
+  console.log('Stored hash present:', !!storedHash)
+  if (!storedHash) {
+    console.log('No stored hash found')
+    return false
+  }
   
   const tokenHash = await hashPassword(token)
-  return tokenHash === storedHash
+  const matches = tokenHash === storedHash
+  console.log('Auth matches:', matches)
+  
+  return matches
+}
+
+// Convert snake_case to camelCase for camp objects
+function convertCampToCamelCase(camp: any): any {
+  if (!camp) return null
+  return {
+    id: camp.id,
+    name: camp.name,
+    description: camp.description,
+    startDate: camp.start_date,
+    endDate: camp.end_date,
+    ageMin: camp.age_min,
+    ageMax: camp.age_max,
+    maxSpots: camp.max_spots,
+    spotsTaken: camp.spots_taken || 0,
+    status: camp.status,
+    createdAt: camp.created_at,
+    updatedAt: camp.updated_at,
+  }
+}
+
+// Convert snake_case to camelCase for pricing item objects
+function convertPricingItemToCamelCase(item: any): any {
+  if (!item) return null
+  return {
+    id: item.id,
+    campId: item.camp_id,
+    name: item.name,
+    description: item.description,
+    amount: item.amount,
+    itemType: item.item_type,
+    isRequired: item.is_required,
+    isActive: item.is_active,
+    displayOrder: item.display_order,
+    createdAt: item.created_at,
+  }
 }
 
 // ============================================================================
@@ -199,7 +248,9 @@ async function handleGetCamps(env: Env, cors: HeadersInit): Promise<Response> {
       ORDER BY start_date ASC
     `).all()
     
-    return jsonResponse({ success: true, camps: results }, 200, cors)
+    const camps = (results as any[]).map(convertCampToCamelCase)
+    
+    return jsonResponse({ success: true, camps }, 200, cors)
   } catch (error) {
     console.error('Get camps error:', error)
     return errorResponse('Failed to fetch camps', 500, cors)
@@ -238,9 +289,34 @@ async function handleGetCamp(campId: string, env: Env, cors: HeadersInit): Promi
 async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
     const isAuthed = await verifyAuth(request, env)
-    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    if (!isAuthed) {
+      console.log('Create camp: Auth failed')
+      return jsonResponse({
+        success: false,
+        error: 'Unauthorized - please login again',
+        hint: 'Your session may have expired. Try refreshing the page and logging in again.'
+      }, 401, cors)
+    }
     
-    const data: Camp = await request.json()
+    const data: any = await request.json()
+    
+    // Handle both camelCase (from frontend) and snake_case
+    const startDate = data.startDate || data.start_date
+    const endDate = data.endDate || data.end_date
+    const ageMin = data.ageMin || data.age_min
+    const ageMax = data.ageMax || data.age_max
+    const maxSpots = data.maxSpots || data.max_spots
+    
+    console.log('Creating camp with data:', {
+      name: data.name,
+      description: data.description,
+      startDate,
+      endDate,
+      ageMin,
+      ageMax,
+      maxSpots,
+      status: data.status
+    })
     
     const result = await env.DB.prepare(`
       INSERT INTO camps (
@@ -249,11 +325,11 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
     `).bind(
       data.name,
       data.description || '',
-      data.start_date,
-      data.end_date,
-      data.age_min,
-      data.age_max,
-      data.max_spots,
+      startDate,
+      endDate,
+      ageMin,
+      ageMax,
+      maxSpots,
       data.status || 'active'
     ).run()
     
@@ -264,16 +340,37 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
     }, 201, cors)
   } catch (error) {
     console.error('Create camp error:', error)
-    return errorResponse('Failed to create camp', 500, cors)
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error('Error details:', errorMsg)
+    console.error('Stack:', errorStack)
+    
+    // Return detailed error for debugging
+    return jsonResponse({
+      success: false,
+      error: 'Failed to create camp',
+      details: errorMsg,
+      stack: errorStack?.split('\n').slice(0, 3).join('\n')
+    }, 500, cors)
   }
 }
 
 async function handleUpdateCamp(campId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
     const isAuthed = await verifyAuth(request, env)
-    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    if (!isAuthed) {
+      console.log('Update camp: Auth failed')
+      return errorResponse('Unauthorized - please login again', 401, cors)
+    }
     
-    const data: Partial<Camp> = await request.json()
+    const data: any = await request.json()
+    
+    // Handle both camelCase (from frontend) and snake_case
+    const startDate = data.startDate || data.start_date
+    const endDate = data.endDate || data.end_date
+    const ageMin = data.ageMin || data.age_min
+    const ageMax = data.ageMax || data.age_max
+    const maxSpots = data.maxSpots || data.max_spots
     
     await env.DB.prepare(`
       UPDATE camps 
@@ -284,11 +381,11 @@ async function handleUpdateCamp(campId: string, request: Request, env: Env, cors
     `).bind(
       data.name,
       data.description,
-      data.start_date,
-      data.end_date,
-      data.age_min,
-      data.age_max,
-      data.max_spots,
+      startDate,
+      endDate,
+      ageMin,
+      ageMax,
+      maxSpots,
       data.status,
       campId
     ).run()
@@ -331,7 +428,9 @@ async function handleGetPricing(env: Env, cors: HeadersInit): Promise<Response> 
       ORDER BY p.display_order ASC
     `).all()
     
-    return jsonResponse({ success: true, items: results }, 200, cors)
+    const items = (results as any[]).map(convertPricingItemToCamelCase)
+    
+    return jsonResponse({ success: true, items }, 200, cors)
   } catch (error) {
     console.error('Get pricing error:', error)
     return errorResponse('Failed to fetch pricing', 500, cors)
