@@ -1,28 +1,10 @@
 import { z } from 'zod'
 
-export const registrationSchema = z.object({
-  // Basic Info
-  email: z.string().email('Please enter a valid email address'),
+// Child-specific schema
+export const childSchema = z.object({
   childFullName: z.string().min(2, 'Child\'s full name is required'),
-  childAge: z.string().min(1, 'Please select child\'s age'),
   childDob: z.string().min(1, 'Date of birth is required'),
-  parentFullName: z.string().min(2, 'Parent\'s full name is required'),
-  address: z.string().optional(),
-  phone: z.string().min(10, 'Please enter a valid phone number'),
-
-  // Emergency Contact 1
-  emergency1Name: z.string().min(2, 'Emergency contact name is required'),
-  emergency1Phone: z.string().min(10, 'Emergency contact phone is required'),
-  emergency1Relationship: z.string().min(1, 'Relationship is required'),
-
-  // Emergency Contact 2
-  emergency2Name: z.string().optional(),
-  emergency2Phone: z.string().optional(),
-  emergency2Relationship: z.string().optional(),
-
-  // Authorised Collectors
-  authorisedCollectors: z.string().optional(),
-
+  
   // Walk Home
   walkHomeAlone: z.enum(['yes', 'no'], {
     required_error: 'Please select an option',
@@ -53,35 +35,6 @@ export const registrationSchema = z.object({
     required_error: 'Please select an option',
   }),
   furtherInfoDetails: z.string().optional(),
-
-  // Permission Checkboxes
-  permissionPhotos: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionHealth: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionActivities: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionLocations: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionMeals: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionBathroom: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionFirstAid: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionEquipment: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
-  permissionAppWaiver: z.boolean().refine(val => val === true, {
-    message: 'You must agree to this permission',
-  }),
 }).refine((data) => {
   if (data.hasMedicalConditions === 'yes' && !data.medicalConditionsDetails) {
     return false
@@ -124,5 +77,86 @@ export const registrationSchema = z.object({
   path: ['furtherInfoDetails'],
 })
 
-export type RegistrationFormData = z.infer<typeof registrationSchema>
+// Full registration schema with multiple children support
+export const registrationSchema = z.object({
+  // Parent/Guardian Info
+  email: z.string().email('Please enter a valid email address'),
+  parentFullName: z.string().min(2, 'Parent\'s full name is required'),
+  address: z.string().optional(),
+  phone: z.string().min(10, 'Please enter a valid phone number'),
 
+  // Emergency Contact 1
+  emergency1Name: z.string().min(2, 'Emergency contact name is required'),
+  emergency1Phone: z.string().min(10, 'Emergency contact phone is required'),
+  emergency1Relationship: z.string().min(1, 'Relationship is required'),
+
+  // Emergency Contact 2
+  emergency2Name: z.string().optional(),
+  emergency2Phone: z.string().optional(),
+  emergency2Relationship: z.string().optional(),
+
+  // Authorised Collectors
+  authorisedCollectors: z.string().optional(),
+
+  // Permission Checkboxes
+  permissionPhotos: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionHealth: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionActivities: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionLocations: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionMeals: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionBathroom: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionFirstAid: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionEquipment: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+  permissionAppWaiver: z.boolean().refine(val => val === true, {
+    message: 'You must agree to this permission',
+  }),
+})
+
+// Legacy single-child schema for backwards compatibility
+export const singleChildRegistrationSchema = registrationSchema.extend({
+  childFullName: z.string().min(2, 'Child\'s full name is required'),
+  childDob: z.string().min(1, 'Date of birth is required'),
+  walkHomeAlone: z.enum(['yes', 'no'], {
+    required_error: 'Please select an option',
+  }),
+  hasMedicalConditions: z.enum(['yes', 'no'], {
+    required_error: 'Please select an option',
+  }),
+  medicalConditionsDetails: z.string().optional(),
+  hasAdditionalNeeds: z.enum(['yes', 'no'], {
+    required_error: 'Please select an option',
+  }),
+  additionalNeedsDetails: z.string().optional(),
+  hasAllergies: z.enum(['yes', 'no'], {
+    required_error: 'Please select an option',
+  }),
+  allergiesDetails: z.string().optional(),
+  hasMedication: z.enum(['yes', 'no'], {
+    required_error: 'Please select an option',
+  }),
+  medicationDetails: z.string().optional(),
+  hasFurtherInfo: z.enum(['yes', 'no'], {
+    required_error: 'Please select an option',
+  }),
+  furtherInfoDetails: z.string().optional(),
+})
+
+export type ChildFormData = z.infer<typeof childSchema>
+export type RegistrationFormData = z.infer<typeof singleChildRegistrationSchema>
+export type ParentFormData = z.infer<typeof registrationSchema>

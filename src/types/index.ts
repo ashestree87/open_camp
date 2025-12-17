@@ -1,14 +1,27 @@
 // Open Camp Types
 
+export interface ChildData {
+  childFullName: string
+  childDob: string
+  walkHomeAlone: 'yes' | 'no'
+  hasMedicalConditions: 'yes' | 'no'
+  medicalConditionsDetails?: string
+  hasAdditionalNeeds: 'yes' | 'no'
+  additionalNeedsDetails?: string
+  hasAllergies: 'yes' | 'no'
+  allergiesDetails?: string
+  hasMedication: 'yes' | 'no'
+  medicationDetails?: string
+  hasFurtherInfo: 'yes' | 'no'
+  furtherInfoDetails?: string
+}
+
 export interface RegistrationFormData {
   // Camp selection
   campId: number
   
-  // Contact & Child Info
+  // Parent/Guardian Info
   email: string
-  childFullName: string
-  childAge: string
-  childDob: string
   parentFullName: string
   address: string
   phone: string
@@ -23,19 +36,6 @@ export interface RegistrationFormData {
   
   // Collection & Safety
   authorisedCollectors: string
-  walkHomeAlone: string
-  
-  // Medical Information
-  hasMedicalConditions: string
-  medicalConditionsDetails: string
-  hasAdditionalNeeds: string
-  additionalNeedsDetails: string
-  hasAllergies: string
-  allergiesDetails: string
-  hasMedication: string
-  medicationDetails: string
-  hasFurtherInfo: string
-  furtherInfoDetails: string
   
   // Permissions
   permissionPhotos: boolean
@@ -48,8 +48,26 @@ export interface RegistrationFormData {
   permissionEquipment: boolean
   permissionAppWaiver: boolean
   
+  // Children (for multi-child registration)
+  children: ChildData[]
+  
   // Pricing selections
   selectedItems: number[]  // IDs of selected pricing items
+  
+  // Legacy single-child fields (for backwards compatibility)
+  childFullName?: string
+  childDob?: string
+  walkHomeAlone?: string
+  hasMedicalConditions?: string
+  medicalConditionsDetails?: string
+  hasAdditionalNeeds?: string
+  additionalNeedsDetails?: string
+  hasAllergies?: string
+  allergiesDetails?: string
+  hasMedication?: string
+  medicationDetails?: string
+  hasFurtherInfo?: string
+  furtherInfoDetails?: string
 }
 
 export interface Registration extends RegistrationFormData {
@@ -72,6 +90,10 @@ export interface Camp {
   maxSpots: number
   spotsTaken: number
   status: 'active' | 'full' | 'archived'
+  // Sibling discount settings
+  siblingDiscountEnabled: boolean
+  siblingDiscountAmount: number
+  siblingDiscountType: 'fixed' | 'percentage'
   createdAt: string
   updatedAt: string
 }

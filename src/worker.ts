@@ -40,23 +40,10 @@ interface PricingItem {
   created_at?: string
 }
 
-interface RegistrationData {
-  camp_id: number
-  selected_items: number[]
-  email: string
+// Child-specific data
+interface ChildData {
   childFullName: string
-  childAge: string
   childDob: string
-  parentFullName: string
-  address: string
-  phone: string
-  emergency1Name: string
-  emergency1Phone: string
-  emergency1Relationship: string
-  emergency2Name: string
-  emergency2Phone: string
-  emergency2Relationship: string
-  authorisedCollectors: string
   walkHomeAlone: string
   hasMedicalConditions: string
   medicalConditionsDetails: string
@@ -68,6 +55,42 @@ interface RegistrationData {
   medicationDetails: string
   hasFurtherInfo: string
   furtherInfoDetails: string
+}
+
+interface RegistrationData {
+  camp_id?: number  // Legacy format
+  campId?: number   // New format
+  selected_items?: number[]  // Legacy format
+  selectedItems?: number[]   // New format
+  email: string
+  parentFullName: string
+  address?: string
+  phone: string
+  emergency1Name: string
+  emergency1Phone: string
+  emergency1Relationship: string
+  emergency2Name?: string
+  emergency2Phone?: string
+  emergency2Relationship?: string
+  authorisedCollectors?: string
+  // Multi-child support
+  children?: ChildData[]
+  // Legacy single-child fields (backwards compatibility)
+  childFullName?: string
+  childAge?: string
+  childDob?: string
+  walkHomeAlone?: string
+  hasMedicalConditions?: string
+  medicalConditionsDetails?: string
+  hasAdditionalNeeds?: string
+  additionalNeedsDetails?: string
+  hasAllergies?: string
+  allergiesDetails?: string
+  hasMedication?: string
+  medicationDetails?: string
+  hasFurtherInfo?: string
+  furtherInfoDetails?: string
+  // Permissions (shared for all children)
   permissionPhotos: boolean
   permissionHealth: boolean
   permissionActivities: boolean
@@ -77,6 +100,9 @@ interface RegistrationData {
   permissionFirstAid: boolean
   permissionEquipment: boolean
   permissionAppWaiver: boolean
+  // Total and payment
+  totalAmount?: number
+  paymentStatus?: string
 }
 
 // Constants
@@ -152,6 +178,9 @@ function convertCampToCamelCase(camp: any): any {
     maxSpots: camp.max_spots,
     spotsTaken: camp.spots_taken || 0,
     status: camp.status,
+    siblingDiscountEnabled: camp.sibling_discount_enabled === 1,
+    siblingDiscountAmount: camp.sibling_discount_amount || 0,
+    siblingDiscountType: camp.sibling_discount_type || 'fixed',
     createdAt: camp.created_at,
     updatedAt: camp.updated_at,
   }
@@ -167,9 +196,9 @@ function convertPricingItemToCamelCase(item: any): any {
     description: item.description,
     amount: item.amount,
     itemType: item.item_type,
-    isRequired: item.is_required,
-    isActive: item.is_active,
-    displayOrder: item.display_order,
+    isRequired: item.is_required === 1 || item.is_required === true,
+    isActive: item.is_active === 1 || item.is_active === true,
+    displayOrder: item.display_order || 0,
     createdAt: item.created_at,
   }
 }
@@ -307,6 +336,11 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
     const ageMax = data.ageMax || data.age_max
     const maxSpots = data.maxSpots || data.max_spots
     
+    // Sibling discount settings
+    const siblingDiscountEnabled = data.siblingDiscountEnabled || data.sibling_discount_enabled || false
+    const siblingDiscountAmount = data.siblingDiscountAmount || data.sibling_discount_amount || 0
+    const siblingDiscountType = data.siblingDiscountType || data.sibling_discount_type || 'fixed'
+    
     console.log('Creating camp with data:', {
       name: data.name,
       description: data.description,
@@ -315,13 +349,17 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
       ageMin,
       ageMax,
       maxSpots,
-      status: data.status
+      status: data.status,
+      siblingDiscountEnabled,
+      siblingDiscountAmount,
+      siblingDiscountType
     })
     
     const result = await env.DB.prepare(`
       INSERT INTO camps (
-        name, description, start_date, end_date, age_min, age_max, max_spots, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        name, description, start_date, end_date, age_min, age_max, max_spots, status,
+        sibling_discount_enabled, sibling_discount_amount, sibling_discount_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       data.name,
       data.description || '',
@@ -330,7 +368,10 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
       ageMin,
       ageMax,
       maxSpots,
-      data.status || 'active'
+      data.status || 'active',
+      siblingDiscountEnabled ? 1 : 0,
+      siblingDiscountAmount,
+      siblingDiscountType
     ).run()
     
     return jsonResponse({
@@ -372,10 +413,16 @@ async function handleUpdateCamp(campId: string, request: Request, env: Env, cors
     const ageMax = data.ageMax || data.age_max
     const maxSpots = data.maxSpots || data.max_spots
     
+    // Sibling discount settings
+    const siblingDiscountEnabled = data.siblingDiscountEnabled ?? data.sibling_discount_enabled ?? false
+    const siblingDiscountAmount = data.siblingDiscountAmount ?? data.sibling_discount_amount ?? 0
+    const siblingDiscountType = data.siblingDiscountType || data.sibling_discount_type || 'fixed'
+    
     await env.DB.prepare(`
       UPDATE camps 
       SET name = ?, description = ?, start_date = ?, end_date = ?,
           age_min = ?, age_max = ?, max_spots = ?, status = ?,
+          sibling_discount_enabled = ?, sibling_discount_amount = ?, sibling_discount_type = ?,
           updated_at = datetime('now')
       WHERE id = ?
     `).bind(
@@ -387,6 +434,9 @@ async function handleUpdateCamp(campId: string, request: Request, env: Env, cors
       ageMax,
       maxSpots,
       data.status,
+      siblingDiscountEnabled ? 1 : 0,
+      siblingDiscountAmount,
+      siblingDiscountType,
       campId
     ).run()
     
@@ -442,21 +492,31 @@ async function handleCreatePricing(request: Request, env: Env, cors: HeadersInit
     const isAuthed = await verifyAuth(request, env)
     if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
     
-    const data: PricingItem = await request.json()
+    const data: any = await request.json()
+    
+    // Handle both camelCase (frontend) and snake_case
+    const campId = data.campId ?? data.camp_id ?? null
+    const name = data.name
+    const description = data.description || ''
+    const amount = data.amount
+    const itemType = data.itemType || data.item_type || 'add_on'
+    const isRequired = data.isRequired ?? data.is_required ?? false
+    const isActive = data.isActive ?? data.is_active ?? true
+    const displayOrder = data.displayOrder ?? data.display_order ?? 0
     
     const result = await env.DB.prepare(`
       INSERT INTO pricing_items (
         camp_id, name, description, amount, item_type, is_required, is_active, display_order
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      data.camp_id,
-      data.name,
-      data.description || '',
-      data.amount,
-      data.item_type,
-      data.is_required ? 1 : 0,
-      data.is_active ? 1 : 0,
-      data.display_order || 0
+      campId,
+      name,
+      description,
+      amount,
+      itemType,
+      isRequired ? 1 : 0,
+      isActive ? 1 : 0,
+      displayOrder
     ).run()
     
     return jsonResponse({
@@ -466,7 +526,8 @@ async function handleCreatePricing(request: Request, env: Env, cors: HeadersInit
     }, 201, cors)
   } catch (error) {
     console.error('Create pricing error:', error)
-    return errorResponse('Failed to create pricing item', 500, cors)
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    return errorResponse(`Failed to create pricing item: ${errorMsg}`, 500, cors)
   }
 }
 
@@ -475,28 +536,54 @@ async function handleUpdatePricing(itemId: string, request: Request, env: Env, c
     const isAuthed = await verifyAuth(request, env)
     if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
     
-    const data: Partial<PricingItem> = await request.json()
+    const data: any = await request.json()
+    
+    console.log('Updating pricing item:', itemId, 'with data:', JSON.stringify(data))
+    
+    // Handle both camelCase (frontend) and snake_case
+    const name = data.name
+    const description = data.description || ''
+    const amount = typeof data.amount === 'number' ? data.amount : parseFloat(data.amount) || 0
+    const itemType = data.itemType || data.item_type || 'add_on'
+    const isRequired = data.isRequired ?? data.is_required ?? false
+    const isActive = data.isActive ?? data.is_active ?? true
+    const displayOrder = typeof data.displayOrder === 'number' ? data.displayOrder : (data.display_order ?? 0)
+    const campId = data.campId ?? data.camp_id ?? null
+    
+    console.log('Parsed values:', { name, description, amount, itemType, isRequired, isActive, displayOrder, campId })
+    
+    if (!name) {
+      return errorResponse('Name is required', 400, cors)
+    }
     
     await env.DB.prepare(`
       UPDATE pricing_items 
       SET name = ?, description = ?, amount = ?, item_type = ?,
-          is_required = ?, is_active = ?, display_order = ?
+          is_required = ?, is_active = ?, display_order = ?, camp_id = ?
       WHERE id = ?
     `).bind(
-      data.name,
-      data.description,
-      data.amount,
-      data.item_type,
-      data.is_required ? 1 : 0,
-      data.is_active ? 1 : 0,
-      data.display_order,
-      itemId
+      name,
+      description,
+      amount,
+      itemType,
+      isRequired ? 1 : 0,
+      isActive ? 1 : 0,
+      displayOrder,
+      campId,
+      parseInt(itemId)
     ).run()
     
     return jsonResponse({ success: true, message: 'Pricing item updated successfully' }, 200, cors)
   } catch (error) {
     console.error('Update pricing error:', error)
-    return errorResponse('Failed to update pricing item', 500, cors)
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error('Stack:', errorStack)
+    return jsonResponse({
+      success: false,
+      error: 'Failed to update pricing item',
+      details: errorMsg,
+    }, 500, cors)
   }
 }
 
@@ -520,33 +607,68 @@ async function handleDeletePricing(itemId: string, request: Request, env: Env, c
 
 async function handleCreatePaymentIntent(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
-    const { campId, selectedItems, email, childName } = await request.json() as {
+    const { campId, selectedItems, email, childrenCount } = await request.json() as {
       campId: number
       selectedItems: number[]
       email: string
-      childName: string
+      childrenCount: number
     }
     
-    // Calculate total amount
-    const placeholders = selectedItems.map(() => '?').join(',')
-    const { results } = await env.DB.prepare(`
-      SELECT id, name, amount FROM pricing_items WHERE id IN (${placeholders})
-    `).bind(...selectedItems).all()
+    const numChildren = childrenCount || 1
     
-    const totalAmount = (results as any[]).reduce((sum, item) => sum + item.amount, 0)
+    // Get camp details for sibling discount
+    const camp = await env.DB.prepare(`
+      SELECT sibling_discount_enabled, sibling_discount_amount, sibling_discount_type 
+      FROM camps WHERE id = ?
+    `).bind(campId).first()
+    
+    // Calculate base total from pricing items
+    let itemTotal = 0
+    if (selectedItems && selectedItems.length > 0) {
+      const placeholders = selectedItems.map(() => '?').join(',')
+      const { results } = await env.DB.prepare(`
+        SELECT id, name, amount FROM pricing_items WHERE id IN (${placeholders})
+      `).bind(...selectedItems).all()
+      itemTotal = (results as any[]).reduce((sum: number, item: any) => sum + item.amount, 0)
+    }
+    
+    // Calculate total: per-child pricing × number of children
+    let totalAmount = itemTotal * numChildren
+    
+    // Apply sibling discount for 2+ children
+    let siblingDiscount = 0
+    if (numChildren >= 2 && camp && (camp as any).sibling_discount_enabled === 1) {
+      const discountAmount = (camp as any).sibling_discount_amount || 0
+      const discountType = (camp as any).sibling_discount_type || 'fixed'
+      
+      // Apply discount for each additional child (2nd, 3rd, etc.)
+      const additionalChildren = numChildren - 1
+      
+      if (discountType === 'percentage') {
+        // Percentage discount on each additional child's total
+        siblingDiscount = (itemTotal * (discountAmount / 100)) * additionalChildren
+      } else {
+        // Fixed discount per additional child
+        siblingDiscount = discountAmount * additionalChildren
+      }
+      
+      totalAmount = Math.max(totalAmount - siblingDiscount, 0)
+    }
     
     // Create Stripe payment intent
-    const paymentIntent = await createStripePaymentIntent(env, totalAmount, 'gbp', {
+    const paymentIntent = await createStripePaymentIntent(env, totalAmount, 'aed', {
       camp_id: campId.toString(),
       email: email,
-      child_name: childName,
+      children_count: numChildren.toString(),
+      sibling_discount: siblingDiscount.toString(),
     })
     
     return jsonResponse({
       success: true,
       clientSecret: paymentIntent.client_secret,
       amount: totalAmount,
-      currency: 'gbp'
+      siblingDiscount,
+      currency: 'aed'
     }, 200, cors)
   } catch (error) {
     console.error('Create payment intent error:', error)
@@ -562,15 +684,18 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
   try {
     const data: RegistrationData = await request.json()
     
-    // Validate required fields
-    if (!data.camp_id) {
+    // Normalize field names (support both formats)
+    const campId = data.campId || data.camp_id
+    const selectedItems = data.selectedItems || data.selected_items || []
+    
+    if (!campId) {
       return errorResponse('Camp selection required', 400, cors)
     }
     
     // Check camp capacity
     const camp = await env.DB.prepare(`
       SELECT id, max_spots, spots_taken, status FROM camps WHERE id = ?
-    `).bind(data.camp_id).first()
+    `).bind(campId).first()
     
     if (!camp) {
       return errorResponse('Camp not found', 404, cors)
@@ -580,116 +705,211 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
       return errorResponse('Camp is not available for registration', 400, cors)
     }
     
+    // Determine children to register
+    const children: ChildData[] = data.children && data.children.length > 0
+      ? data.children
+      : [{
+          // Legacy single-child format
+          childFullName: data.childFullName || '',
+          childDob: data.childDob || '',
+          walkHomeAlone: data.walkHomeAlone || 'no',
+          hasMedicalConditions: data.hasMedicalConditions || 'no',
+          medicalConditionsDetails: data.medicalConditionsDetails || '',
+          hasAdditionalNeeds: data.hasAdditionalNeeds || 'no',
+          additionalNeedsDetails: data.additionalNeedsDetails || '',
+          hasAllergies: data.hasAllergies || 'no',
+          allergiesDetails: data.allergiesDetails || '',
+          hasMedication: data.hasMedication || 'no',
+          medicationDetails: data.medicationDetails || '',
+          hasFurtherInfo: data.hasFurtherInfo || 'no',
+          furtherInfoDetails: data.furtherInfoDetails || '',
+        }]
+    
+    const numChildren = children.length
     const spotsRemaining = (camp.max_spots as number) - (camp.spots_taken as number || 0)
-    if (spotsRemaining <= 0) {
-      return errorResponse('Camp is full', 400, cors)
+    
+    if (numChildren > spotsRemaining) {
+      return errorResponse(`Only ${spotsRemaining} spots available, but ${numChildren} children submitted`, 400, cors)
     }
     
-    // Calculate total amount
-    let totalAmount = 0
-    if (data.selected_items && data.selected_items.length > 0) {
-      const placeholders = data.selected_items.map(() => '?').join(',')
+    // Calculate total amount (per child × number of children)
+    let itemTotal = 0
+    if (selectedItems.length > 0) {
+      const placeholders = selectedItems.map(() => '?').join(',')
       const { results } = await env.DB.prepare(`
         SELECT SUM(amount) as total FROM pricing_items WHERE id IN (${placeholders})
-      `).bind(...data.selected_items).all()
-      totalAmount = (results[0] as any)?.total || 0
+      `).bind(...selectedItems).all()
+      itemTotal = (results[0] as any)?.total || 0
     }
     
-    // Insert registration
-    const regResult = await env.DB.prepare(`
-      INSERT INTO registrations (
-        camp_id, email, child_full_name, child_age, child_dob, parent_full_name,
-        address, phone, emergency1_name, emergency1_phone, emergency1_relationship,
-        emergency2_name, emergency2_phone, emergency2_relationship,
-        authorised_collectors, walk_home_alone,
-        has_medical_conditions, medical_conditions_details,
-        has_additional_needs, additional_needs_details,
-        has_allergies, allergies_details,
-        has_medication, medication_details,
-        has_further_info, further_info_details,
-        permission_photos, permission_health, permission_activities,
-        permission_locations, permission_meals, permission_bathroom,
-        permission_first_aid, permission_equipment, permission_app_waiver,
-        total_amount, payment_status, created_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, datetime('now')
-      )
-    `).bind(
-      data.camp_id,
-      data.email,
-      data.childFullName,
-      data.childAge || '',
-      data.childDob,
-      data.parentFullName,
-      data.address || '',
-      data.phone,
-      data.emergency1Name,
-      data.emergency1Phone,
-      data.emergency1Relationship,
-      data.emergency2Name || '',
-      data.emergency2Phone || '',
-      data.emergency2Relationship || '',
-      data.authorisedCollectors || '',
-      data.walkHomeAlone,
-      data.hasMedicalConditions,
-      data.medicalConditionsDetails || '',
-      data.hasAdditionalNeeds,
-      data.additionalNeedsDetails || '',
-      data.hasAllergies,
-      data.allergiesDetails || '',
-      data.hasMedication,
-      data.medicationDetails || '',
-      data.hasFurtherInfo,
-      data.furtherInfoDetails || '',
-      data.permissionPhotos ? 1 : 0,
-      data.permissionHealth ? 1 : 0,
-      data.permissionActivities ? 1 : 0,
-      data.permissionLocations ? 1 : 0,
-      data.permissionMeals ? 1 : 0,
-      data.permissionBathroom ? 1 : 0,
-      data.permissionFirstAid ? 1 : 0,
-      data.permissionEquipment ? 1 : 0,
-      data.permissionAppWaiver ? 1 : 0,
-      totalAmount,
-      totalAmount > 0 ? 'pending' : 'paid'
-    ).run()
+    // Calculate base total
+    let totalAmount = data.totalAmount || (itemTotal * numChildren)
     
-    const registrationId = regResult.meta.last_row_id
+    // Apply sibling discount if enabled and multiple children
+    let siblingDiscount = 0
+    if (numChildren >= 2 && (camp as any).sibling_discount_enabled === 1) {
+      const discountAmount = (camp as any).sibling_discount_amount || 0
+      const discountType = (camp as any).sibling_discount_type || 'fixed'
+      
+      // Discount applies to each additional child (2nd, 3rd, etc.)
+      const additionalChildren = numChildren - 1
+      
+      if (discountType === 'percentage') {
+        siblingDiscount = (itemTotal * (discountAmount / 100)) * additionalChildren
+      } else {
+        siblingDiscount = discountAmount * additionalChildren
+      }
+      
+      // Only apply discount if not already provided in totalAmount
+      if (!data.totalAmount) {
+        totalAmount = Math.max(totalAmount - siblingDiscount, 0)
+      }
+    }
     
-    // Insert registration items
-    if (data.selected_items && data.selected_items.length > 0) {
-      for (const itemId of data.selected_items) {
-        const item = await env.DB.prepare(`
-          SELECT amount FROM pricing_items WHERE id = ?
-        `).bind(itemId).first()
-        
-        if (item) {
-          await env.DB.prepare(`
-            INSERT INTO registration_items (registration_id, pricing_item_id, quantity, amount)
-            VALUES (?, ?, 1, ?)
-          `).bind(registrationId, itemId, item.amount).run()
+    // Insert registrations (one per child)
+    const registrationIds: number[] = []
+    
+    for (const child of children) {
+      const regResult = await env.DB.prepare(`
+        INSERT INTO registrations (
+          camp_id, email, child_full_name, child_age, child_dob, parent_full_name,
+          address, phone, emergency1_name, emergency1_phone, emergency1_relationship,
+          emergency2_name, emergency2_phone, emergency2_relationship,
+          authorised_collectors, walk_home_alone,
+          has_medical_conditions, medical_conditions_details,
+          has_additional_needs, additional_needs_details,
+          has_allergies, allergies_details,
+          has_medication, medication_details,
+          has_further_info, further_info_details,
+          permission_photos, permission_health, permission_activities,
+          permission_locations, permission_meals, permission_bathroom,
+          permission_first_aid, permission_equipment, permission_app_waiver,
+          total_amount, payment_status, created_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, datetime('now')
+        )
+      `).bind(
+        campId,
+        data.email,
+        child.childFullName,
+        '', // childAge deprecated
+        child.childDob,
+        data.parentFullName,
+        data.address || '',
+        data.phone,
+        data.emergency1Name,
+        data.emergency1Phone,
+        data.emergency1Relationship,
+        data.emergency2Name || '',
+        data.emergency2Phone || '',
+        data.emergency2Relationship || '',
+        data.authorisedCollectors || '',
+        child.walkHomeAlone,
+        child.hasMedicalConditions,
+        child.medicalConditionsDetails || '',
+        child.hasAdditionalNeeds,
+        child.additionalNeedsDetails || '',
+        child.hasAllergies,
+        child.allergiesDetails || '',
+        child.hasMedication,
+        child.medicationDetails || '',
+        child.hasFurtherInfo,
+        child.furtherInfoDetails || '',
+        data.permissionPhotos ? 1 : 0,
+        data.permissionHealth ? 1 : 0,
+        data.permissionActivities ? 1 : 0,
+        data.permissionLocations ? 1 : 0,
+        data.permissionMeals ? 1 : 0,
+        data.permissionBathroom ? 1 : 0,
+        data.permissionFirstAid ? 1 : 0,
+        data.permissionEquipment ? 1 : 0,
+        data.permissionAppWaiver ? 1 : 0,
+        totalAmount / numChildren, // Split total across children
+        data.paymentStatus || (totalAmount > 0 ? 'pending' : 'paid')
+      ).run()
+      
+      const registrationId = regResult.meta.last_row_id as number
+      registrationIds.push(registrationId)
+      
+      // Insert registration items for this child
+      if (selectedItems.length > 0) {
+        for (const itemId of selectedItems) {
+          const item = await env.DB.prepare(`
+            SELECT amount FROM pricing_items WHERE id = ?
+          `).bind(itemId).first()
+          
+          if (item) {
+            await env.DB.prepare(`
+              INSERT INTO registration_items (registration_id, pricing_item_id, quantity, amount)
+              VALUES (?, ?, 1, ?)
+            `).bind(registrationId, itemId, item.amount).run()
+          }
         }
       }
     }
     
-    // Update camp spots
+    // Update camp spots (by number of children)
     await env.DB.prepare(`
-      UPDATE camps SET spots_taken = spots_taken + 1 WHERE id = ?
-    `).bind(data.camp_id).run()
+      UPDATE camps SET spots_taken = spots_taken + ? WHERE id = ?
+    `).bind(numChildren, campId).run()
+    
+    // Send emails (async, don't block response)
+    const childNames = children.map(c => c.childFullName).join(', ')
+    sendEmails(env, data.email, childNames, data.parentFullName, data.phone, campId)
+      .catch(err => console.error('Email send error:', err))
     
     return jsonResponse({
       success: true,
-      id: registrationId,
+      ids: registrationIds,
+      childCount: numChildren,
       totalAmount,
-      message: 'Registration successful'
+      message: `Successfully registered ${numChildren} ${numChildren === 1 ? 'child' : 'children'}`
     }, 201, cors)
   } catch (error) {
     console.error('Submit error:', error)
     return errorResponse('Failed to submit registration', 500, cors)
   }
+}
+
+// Helper function to send registration emails
+async function sendEmails(env: Env, parentEmail: string, childNames: string, parentName: string, phone: string, campId: number) {
+  if (!env.RESEND_API_KEY) return
+  
+  const camp = await env.DB.prepare('SELECT name FROM camps WHERE id = ?').bind(campId).first()
+  const campName = (camp as any)?.name || 'Camp'
+  
+  // Send confirmation to parent
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: FROM_EMAIL,
+      to: parentEmail,
+      subject: `Registration Confirmed - ${campName}`,
+      text: `Dear ${parentName},\n\nThank you for registering ${childNames} for ${campName}.\n\nWe look forward to seeing you!\n\nBest regards,\nOpen Camp Team`
+    }),
+  })
+  
+  // Send notification to club
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: FROM_EMAIL,
+      to: CLUB_EMAIL,
+      subject: `New Registration - ${campName}`,
+      text: `New registration received!\n\nChild(ren): ${childNames}\nParent: ${parentName}\nEmail: ${parentEmail}\nPhone: ${phone}\nCamp: ${campName}`
+    }),
+  })
 }
 
 // ============================================================================
