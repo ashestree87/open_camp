@@ -23,6 +23,9 @@ interface Camp {
   max_spots: number
   spots_taken?: number
   status: 'active' | 'full' | 'archived'
+  registration_status?: 'open' | 'paused' | 'closed'
+  waitlist_enabled?: number
+  waitlist_message?: string
   created_at?: string
   updated_at?: string
 }
@@ -178,6 +181,9 @@ function convertCampToCamelCase(camp: any): any {
     maxSpots: camp.max_spots,
     spotsTaken: camp.spots_taken || 0,
     status: camp.status,
+    registrationStatus: camp.registration_status || 'open',
+    waitlistEnabled: camp.waitlist_enabled === 1,
+    waitlistMessage: camp.waitlist_message || '',
     siblingDiscountEnabled: camp.sibling_discount_enabled === 1,
     siblingDiscountAmount: camp.sibling_discount_amount || 0,
     siblingDiscountType: camp.sibling_discount_type || 'fixed',
@@ -278,6 +284,7 @@ async function handleGetCamps(request: Request, env: Env, cors: HeadersInit): Pr
       SELECT 
         id, name, description, start_date, end_date,
         age_min, age_max, max_spots, spots_taken, status,
+        registration_status, waitlist_enabled, waitlist_message,
         sibling_discount_enabled, sibling_discount_amount, sibling_discount_type,
         created_at, updated_at
       FROM camps 
@@ -344,6 +351,11 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
     const ageMax = data.ageMax || data.age_max
     const maxSpots = data.maxSpots || data.max_spots
     
+    // Registration controls
+    const registrationStatus = data.registrationStatus || data.registration_status || 'open'
+    const waitlistEnabled = data.waitlistEnabled ?? data.waitlist_enabled ?? false
+    const waitlistMessage = data.waitlistMessage || data.waitlist_message || ''
+    
     // Sibling discount settings
     const siblingDiscountEnabled = data.siblingDiscountEnabled || data.sibling_discount_enabled || false
     const siblingDiscountAmount = data.siblingDiscountAmount || data.sibling_discount_amount || 0
@@ -366,8 +378,9 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
     const result = await env.DB.prepare(`
       INSERT INTO camps (
         name, description, start_date, end_date, age_min, age_max, max_spots, status,
+        registration_status, waitlist_enabled, waitlist_message,
         sibling_discount_enabled, sibling_discount_amount, sibling_discount_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       data.name,
       data.description || '',
@@ -377,6 +390,9 @@ async function handleCreateCamp(request: Request, env: Env, cors: HeadersInit): 
       ageMax,
       maxSpots,
       data.status || 'active',
+      registrationStatus,
+      waitlistEnabled ? 1 : 0,
+      waitlistMessage,
       siblingDiscountEnabled ? 1 : 0,
       siblingDiscountAmount,
       siblingDiscountType
@@ -414,34 +430,55 @@ async function handleUpdateCamp(campId: string, request: Request, env: Env, cors
     
     const data: any = await request.json()
     
-    // Handle both camelCase (from frontend) and snake_case
-    const startDate = data.startDate || data.start_date
-    const endDate = data.endDate || data.end_date
-    const ageMin = data.ageMin || data.age_min
-    const ageMax = data.ageMax || data.age_max
-    const maxSpots = data.maxSpots || data.max_spots
+    // Fetch existing camp to support partial updates
+    const existingCamp = await env.DB.prepare(`
+      SELECT * FROM camps WHERE id = ?
+    `).bind(campId).first()
+    
+    if (!existingCamp) {
+      return errorResponse('Camp not found', 404, cors)
+    }
+    
+    // Merge with existing data - use incoming data if provided, else keep existing
+    const name = data.name ?? existingCamp.name
+    const description = data.description ?? existingCamp.description
+    const startDate = data.startDate || data.start_date || existingCamp.start_date
+    const endDate = data.endDate || data.end_date || existingCamp.end_date
+    const ageMin = data.ageMin ?? data.age_min ?? existingCamp.age_min
+    const ageMax = data.ageMax ?? data.age_max ?? existingCamp.age_max
+    const maxSpots = data.maxSpots ?? data.max_spots ?? existingCamp.max_spots
+    const status = data.status ?? existingCamp.status
+    
+    // Registration controls
+    const registrationStatus = data.registrationStatus ?? data.registration_status ?? existingCamp.registration_status ?? 'open'
+    const waitlistEnabled = data.waitlistEnabled ?? data.waitlist_enabled ?? existingCamp.waitlist_enabled ?? 0
+    const waitlistMessage = data.waitlistMessage ?? data.waitlist_message ?? existingCamp.waitlist_message ?? ''
     
     // Sibling discount settings
-    const siblingDiscountEnabled = data.siblingDiscountEnabled ?? data.sibling_discount_enabled ?? false
-    const siblingDiscountAmount = data.siblingDiscountAmount ?? data.sibling_discount_amount ?? 0
-    const siblingDiscountType = data.siblingDiscountType || data.sibling_discount_type || 'fixed'
+    const siblingDiscountEnabled = data.siblingDiscountEnabled ?? data.sibling_discount_enabled ?? existingCamp.sibling_discount_enabled ?? 0
+    const siblingDiscountAmount = data.siblingDiscountAmount ?? data.sibling_discount_amount ?? existingCamp.sibling_discount_amount ?? 0
+    const siblingDiscountType = data.siblingDiscountType || data.sibling_discount_type || existingCamp.sibling_discount_type || 'fixed'
     
     await env.DB.prepare(`
       UPDATE camps 
       SET name = ?, description = ?, start_date = ?, end_date = ?,
           age_min = ?, age_max = ?, max_spots = ?, status = ?,
+          registration_status = ?, waitlist_enabled = ?, waitlist_message = ?,
           sibling_discount_enabled = ?, sibling_discount_amount = ?, sibling_discount_type = ?,
           updated_at = datetime('now')
       WHERE id = ?
     `).bind(
-      data.name,
-      data.description,
+      name,
+      description,
       startDate,
       endDate,
       ageMin,
       ageMax,
       maxSpots,
-      data.status,
+      status,
+      registrationStatus,
+      waitlistEnabled ? 1 : 0,
+      waitlistMessage,
       siblingDiscountEnabled ? 1 : 0,
       siblingDiscountAmount,
       siblingDiscountType,
@@ -674,6 +711,18 @@ async function handleCreatePaymentIntent(request: Request, env: Env, cors: Heade
       totalAmount = Math.max(totalAmount - siblingDiscount, 0)
     }
     
+    // Skip Stripe for free registrations (amount < 2 AED minimum)
+    if (totalAmount < 2) {
+      return jsonResponse({
+        success: true,
+        clientSecret: null,
+        amount: 0,
+        siblingDiscount,
+        currency: 'aed',
+        isFree: true
+      }, 200, cors)
+    }
+    
     // Create Stripe payment intent
     const paymentIntent = await createStripePaymentIntent(env, totalAmount, 'aed', {
       camp_id: campId.toString(),
@@ -687,11 +736,20 @@ async function handleCreatePaymentIntent(request: Request, env: Env, cors: Heade
       clientSecret: paymentIntent.client_secret,
       amount: totalAmount,
       siblingDiscount,
-      currency: 'aed'
+      currency: 'aed',
+      isFree: false
     }, 200, cors)
   } catch (error) {
     console.error('Create payment intent error:', error)
-    return errorResponse(error instanceof Error ? error.message : 'Payment setup failed', 500, cors)
+    const message = error instanceof Error ? error.message : 'Payment setup failed'
+    // Include more details for debugging
+    const envKeys = Object.keys(env || {})
+    return jsonResponse({ 
+      error: message,
+      debug: env.STRIPE_SECRET_KEY ? 'Key exists' : 'Key missing',
+      availableEnvKeys: envKeys,
+      hasEnv: !!env
+    }, 500, cors)
   }
 }
 
@@ -788,6 +846,9 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
     // Insert registrations (one per child)
     const registrationIds: number[] = []
     
+    // Determine registration status (waitlist if camp is full and waitlist enabled)
+    const regStatus = data.registrationStatus || 'confirmed'
+    
     for (const child of children) {
       const regResult = await env.DB.prepare(`
         INSERT INTO registrations (
@@ -803,12 +864,12 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
           permission_photos, permission_health, permission_activities,
           permission_locations, permission_meals, permission_bathroom,
           permission_first_aid, permission_equipment, permission_app_waiver,
-          total_amount, payment_status, created_at
+          total_amount, payment_status, registration_status, created_at
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, datetime('now')
+          ?, ?, ?, ?, ?, datetime('now')
         )
       `).bind(
         campId,
@@ -847,7 +908,8 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
         data.permissionEquipment ? 1 : 0,
         data.permissionAppWaiver ? 1 : 0,
         totalAmount / numChildren, // Split total across children
-        data.paymentStatus || (totalAmount > 0 ? 'pending' : 'paid')
+        data.paymentStatus || (totalAmount > 0 ? 'pending' : 'paid'),
+        regStatus
       ).run()
       
       const registrationId = regResult.meta.last_row_id as number
@@ -870,10 +932,12 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
       }
     }
     
-    // Update camp spots (by number of children)
-    await env.DB.prepare(`
-      UPDATE camps SET spots_taken = spots_taken + ? WHERE id = ?
-    `).bind(numChildren, campId).run()
+    // Update camp spots (by number of children) - only if not on waitlist
+    if (regStatus !== 'waitlist') {
+      await env.DB.prepare(`
+        UPDATE camps SET spots_taken = spots_taken + ? WHERE id = ?
+      `).bind(numChildren, campId).run()
+    }
     
     // Send emails (async, don't block response)
     const childNames = children.map(c => c.childFullName).join(', ')
@@ -1015,7 +1079,7 @@ async function handleUpdateRegistration(regId: string, request: Request, env: En
       'permission_photos', 'permission_health', 'permission_activities',
       'permission_locations', 'permission_meals', 'permission_bathroom',
       'permission_first_aid', 'permission_equipment', 'permission_app_waiver',
-      'payment_status', 'total_amount'
+      'payment_status', 'total_amount', 'admin_notes', 'registration_status'
     ]
     
     const updates: string[] = []

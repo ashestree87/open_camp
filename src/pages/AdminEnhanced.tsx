@@ -194,8 +194,7 @@ export default function AdminEnhanced() {
       {/* Tab Content */}
       {activeTab === 'dashboard' && <DashboardTab />}
       {activeTab === 'camps' && <CampsTab token={auth.token!} onViewRegistrations={(campId) => {
-        setSelectedCampId(campId)
-        setActiveTab('registrations')
+        setSelectedCampId(campId) // This already sets tab to 'registrations'
       }} />}
       {activeTab === 'pricing' && <PricingTab token={auth.token!} />}
       {activeTab === 'registrations' && <RegistrationsTab token={auth.token!} selectedCampId={selectedCampId} onClearFilter={() => setSelectedCampId(null)} />}
@@ -324,13 +323,27 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Archive this camp?')) return
+  const handleArchiveCamp = async (id: number, currentStatus: string) => {
+    const isArchived = currentStatus === 'archived'
+    if (!confirm(isArchived ? 'Restore this camp?' : 'Archive this camp?')) return
     
-    await fetch(`/api/camps/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
+    if (isArchived) {
+      // Restore: update status back to active
+      await fetch(`/api/camps/${id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ status: 'active' }),
+      })
+    } else {
+      // Archive: use DELETE which sets status to archived
+      await fetch(`/api/camps/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+    }
     
     loadCamps()
   }
@@ -421,7 +434,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
                   >
                     View Registrations
                   </button>
-                  {hasEnded ? (
+                  {hasEnded && camp.status !== 'archived' ? (
                     <span className="text-xs text-gray-500 py-1 px-3" title="Cannot edit camps that have ended">
                       Ended
                     </span>
@@ -434,10 +447,10 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
                     </button>
                   )}
                   <button
-                    onClick={() => handleDelete(camp.id)}
-                    className="btn-secondary text-sm py-1 px-3 text-red-400 hover:bg-red-900/20"
+                    onClick={() => handleArchiveCamp(camp.id, camp.status)}
+                    className={`btn-secondary text-sm py-1 px-3 ${camp.status === 'archived' ? 'text-green-400 hover:bg-green-900/20' : 'text-red-400 hover:bg-red-900/20'}`}
                   >
-                    Archive
+                    {camp.status === 'archived' ? 'Restore' : 'Archive'}
                   </button>
                 </div>
               </div>
@@ -469,6 +482,9 @@ function CampForm({
     ageMax: camp?.ageMax || 15,
     maxSpots: camp?.maxSpots || 20,
     status: camp?.status || 'active',
+    registrationStatus: camp?.registrationStatus || 'open',
+    waitlistEnabled: camp?.waitlistEnabled || false,
+    waitlistMessage: camp?.waitlistMessage || '',
     siblingDiscountEnabled: camp?.siblingDiscountEnabled || false,
     siblingDiscountAmount: camp?.siblingDiscountAmount || 0,
     siblingDiscountType: camp?.siblingDiscountType || 'fixed',
@@ -660,6 +676,61 @@ function CampForm({
               <option value="archived">Archived</option>
             </select>
           </div>
+        </div>
+
+        {/* Registration Controls Section */}
+        <div className="space-y-4">
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+            Registration Controls
+          </h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Registration Status</label>
+              <select
+                value={formData.registrationStatus}
+                onChange={(e) => setFormData({ ...formData, registrationStatus: e.target.value as 'open' | 'paused' | 'closed' })}
+                className="input-field"
+              >
+                <option value="open">🟢 Open - Accepting registrations</option>
+                <option value="paused">🟡 Paused - Temporarily stopped</option>
+                <option value="closed">🔴 Closed - No registrations</option>
+              </select>
+              <p className="text-gray-500 text-xs mt-1">
+                {formData.registrationStatus === 'open' && 'Users can register for this camp'}
+                {formData.registrationStatus === 'paused' && 'Registration form shows a "paused" message'}
+                {formData.registrationStatus === 'closed' && 'Registration form is hidden'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="flex items-center gap-3 cursor-pointer mt-6">
+                <input
+                  type="checkbox"
+                  checked={formData.waitlistEnabled}
+                  onChange={(e) => setFormData({ ...formData, waitlistEnabled: e.target.checked })}
+                  className="w-5 h-5 rounded"
+                />
+                <span className="text-gray-300">Enable Waitlist</span>
+              </label>
+              <p className="text-gray-500 text-xs mt-1">
+                When camp is full, users can join a waitlist
+              </p>
+            </div>
+          </div>
+          
+          {formData.waitlistEnabled && (
+            <div>
+              <label className="label">Waitlist Message (optional)</label>
+              <input
+                type="text"
+                value={formData.waitlistMessage}
+                onChange={(e) => setFormData({ ...formData, waitlistMessage: e.target.value })}
+                className="input-field"
+                placeholder="e.g., We'll contact you if a spot opens up"
+              />
+            </div>
+          )}
         </div>
 
         {/* Sibling Discount Section */}
@@ -1306,6 +1377,18 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
     return status
   }
 
+  const getStatusBadge = (status: string | null | undefined) => {
+    switch (status) {
+      case 'confirmed': return 'bg-green-900/50 text-green-400'
+      case 'pending': return 'bg-yellow-900/50 text-yellow-400'
+      case 'waitlist': return 'bg-purple-900/50 text-purple-400'
+      case 'cancelled': return 'bg-red-900/50 text-red-400'
+      case 'attended': return 'bg-blue-900/50 text-blue-400'
+      case 'no-show': return 'bg-gray-700/50 text-gray-400'
+      default: return 'bg-green-900/50 text-green-400'
+    }
+  }
+
   if (loading) {
     return <div className="text-center text-gray-400 py-8">Loading registrations...</div>
   }
@@ -1408,13 +1491,18 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
               onClick={() => setSelectedRegistration(reg)}
               className="card cursor-pointer hover:border-brand-primary/50 transition-all"
             >
-              <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <div className="font-medium text-white">{reg.child_full_name || 'Unknown'}</div>
-                    <span className={`text-xs px-2 py-0.5 rounded ${getPaymentBadge(reg.payment_status)}`}>
-                      {getPaymentLabel(reg.payment_status)}
+                    <span className={`text-xs px-2 py-0.5 rounded ${getStatusBadge(reg.registration_status)}`}>
+                      {reg.registration_status || 'confirmed'}
                     </span>
+                    {reg.payment_status !== 'free' && (
+                      <span className={`text-xs px-2 py-0.5 rounded ${getPaymentBadge(reg.payment_status)}`}>
+                        💳 {getPaymentLabel(reg.payment_status)}
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-gray-400 mt-1">
                     {reg.parent_full_name} • {reg.email} • {reg.phone}
@@ -1474,7 +1562,17 @@ function RegistrationDetail({
     }
   }
 
-  const getPaymentLabel = (status: string | null | undefined) => !status || status === '' ? 'pending' : status
+  const getStatusBadge = (status: string | null | undefined) => {
+    switch (status) {
+      case 'confirmed': return 'bg-green-900/50 text-green-400'
+      case 'pending': return 'bg-yellow-900/50 text-yellow-400'
+      case 'waitlist': return 'bg-purple-900/50 text-purple-400'
+      case 'cancelled': return 'bg-red-900/50 text-red-400'
+      case 'attended': return 'bg-blue-900/50 text-blue-400'
+      case 'no-show': return 'bg-gray-700/50 text-gray-400'
+      default: return 'bg-green-900/50 text-green-400'
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -1640,23 +1738,67 @@ function RegistrationDetail({
             <p className="text-gray-400">{getCampName(formData.camp_id)}</p>
             <p className="text-gray-500 text-sm mt-1">Registered: {formatDate(formData.created_at)}</p>
           </div>
-          <div className="text-right">
+          <div className="text-right space-y-2">
             <div className="text-2xl font-bold text-white">AED {(formData.total_amount || 0).toFixed(2)}</div>
-            {isEditing ? (
-              <select
-                value={formData.payment_status || 'pending'}
-                onChange={(e) => updateField('payment_status', e.target.value)}
-                className="input-field py-1 px-2 text-sm mt-1"
-              >
-                <option value="pending">pending</option>
-                <option value="paid">paid</option>
-                <option value="free">free</option>
-              </select>
-            ) : (
-              <span className={`text-sm px-3 py-1 rounded ${getPaymentBadge(formData.payment_status)}`}>
-                {getPaymentLabel(formData.payment_status)}
-              </span>
-            )}
+            <div className="flex gap-3 justify-end items-center flex-wrap text-sm">
+              {/* Registration Status */}
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Status:</span>
+                <select
+                  value={formData.registration_status || 'confirmed'}
+                  onChange={async (e) => {
+                    const newStatus = e.target.value
+                    const updatedData = { ...formData, registration_status: newStatus }
+                    updateField('registration_status', newStatus)
+                    try {
+                      await fetch(`/api/registrations/${registration.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify(updatedData),
+                      })
+                      onUpdate(updatedData)
+                    } catch (err) {
+                      console.error('Failed to update status:', err)
+                    }
+                  }}
+                  className={`px-2 py-1 rounded border-0 cursor-pointer ${getStatusBadge(formData.registration_status)}`}
+                >
+                  <option value="confirmed">confirmed</option>
+                  <option value="pending">pending</option>
+                  <option value="waitlist">waitlist</option>
+                  <option value="cancelled">cancelled</option>
+                  <option value="attended">attended</option>
+                  <option value="no-show">no-show</option>
+                </select>
+              </div>
+              {/* Payment Status */}
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Payment:</span>
+                <select
+                  value={formData.payment_status || 'pending'}
+                  onChange={async (e) => {
+                    const newStatus = e.target.value
+                    const updatedData = { ...formData, payment_status: newStatus }
+                    updateField('payment_status', newStatus)
+                    try {
+                      await fetch(`/api/registrations/${registration.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify(updatedData),
+                      })
+                      onUpdate(updatedData)
+                    } catch (err) {
+                      console.error('Failed to update payment status:', err)
+                    }
+                  }}
+                  className={`px-2 py-1 rounded border-0 cursor-pointer ${getPaymentBadge(formData.payment_status)}`}
+                >
+                  <option value="pending">pending</option>
+                  <option value="paid">paid</option>
+                  <option value="free">free</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1776,6 +1918,14 @@ function RegistrationDetail({
           )}
         </div>
 
+        {/* Admin Notes */}
+        <AdminNotesSection 
+          registrationId={registration.id}
+          initialNotes={formData.admin_notes}
+          token={token}
+          onUpdate={(notes) => updateField('admin_notes', notes)}
+        />
+
         {/* Permissions & Consent */}
         <div className="mt-6 space-y-3">
           <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Permissions & Consent</h3>
@@ -1800,6 +1950,173 @@ function RegistrationDetail({
           <span>Created: {formatDate(formData.created_at)}</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Admin Notes Section with instant save and chronological history
+function AdminNotesSection({ 
+  registrationId, 
+  initialNotes, 
+  token,
+  onUpdate 
+}: { 
+  registrationId: number
+  initialNotes: string | null
+  token: string
+  onUpdate: (notes: string) => void
+}) {
+  const [newNote, setNewNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [notes, setNotes] = useState<Array<{ text: string; timestamp: string }>>([])
+
+  // Parse existing notes on mount
+  useEffect(() => {
+    if (initialNotes) {
+      try {
+        // Try to parse as JSON array
+        const parsed = JSON.parse(initialNotes)
+        if (Array.isArray(parsed)) {
+          setNotes(parsed)
+        } else {
+          // Legacy: single string note, convert to array
+          setNotes([{ text: initialNotes, timestamp: new Date().toISOString() }])
+        }
+      } catch {
+        // Legacy: plain text, convert to array
+        if (initialNotes.trim()) {
+          setNotes([{ text: initialNotes, timestamp: 'Unknown date' }])
+        }
+      }
+    }
+  }, [initialNotes])
+
+  const formatNoteDate = (timestamp: string) => {
+    if (timestamp === 'Unknown date') return timestamp
+    try {
+      return new Date(timestamp).toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit'
+      })
+    } catch {
+      return timestamp
+    }
+  }
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return
+    
+    setSaving(true)
+    const newNoteEntry = {
+      text: newNote.trim(),
+      timestamp: new Date().toISOString()
+    }
+    const updatedNotes = [...notes, newNoteEntry]
+    const notesJson = JSON.stringify(updatedNotes)
+    
+    try {
+      const response = await fetch(`/api/registrations/${registrationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ admin_notes: notesJson }),
+      })
+      
+      if (!response.ok) throw new Error('Failed to save')
+      
+      setNotes(updatedNotes)
+      onUpdate(notesJson)
+      setNewNote('')
+    } catch (error) {
+      alert('Failed to save note')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteNote = async (index: number) => {
+    if (!confirm('Delete this note?')) return
+    
+    setSaving(true)
+    const updatedNotes = notes.filter((_, i) => i !== index)
+    const notesJson = updatedNotes.length > 0 ? JSON.stringify(updatedNotes) : ''
+    
+    try {
+      const response = await fetch(`/api/registrations/${registrationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ admin_notes: notesJson }),
+      })
+      
+      if (!response.ok) throw new Error('Failed to delete')
+      
+      setNotes(updatedNotes)
+      onUpdate(notesJson)
+    } catch (error) {
+      alert('Failed to delete note')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-6 space-y-3">
+      <h3 className="font-heading text-lg text-yellow-500 uppercase border-b border-yellow-700 pb-2">
+        📝 Admin Notes <span className="text-xs text-gray-500 normal-case font-normal">(internal only - {notes.length} notes)</span>
+      </h3>
+      
+      {/* Add new note */}
+      <div className="flex gap-2">
+        <textarea
+          value={newNote}
+          onChange={(e) => setNewNote(e.target.value)}
+          className="input-field flex-1 bg-yellow-900/10 border-yellow-700/30"
+          rows={2}
+          placeholder="Add a note..."
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && e.metaKey) {
+              handleAddNote()
+            }
+          }}
+        />
+        <button
+          onClick={handleAddNote}
+          disabled={saving || !newNote.trim()}
+          className="btn-primary px-4 self-end"
+        >
+          {saving ? '...' : '+ Add'}
+        </button>
+      </div>
+      <p className="text-xs text-gray-500">Press ⌘+Enter to add quickly</p>
+      
+      {/* Notes history */}
+      {notes.length > 0 && (
+        <div className="space-y-2 mt-4">
+          {[...notes].reverse().map((note, reverseIndex) => {
+            const index = notes.length - 1 - reverseIndex
+            return (
+              <div key={index} className="bg-yellow-900/10 border border-yellow-700/30 rounded p-3 group">
+                <div className="flex justify-between items-start gap-2">
+                  <p className="text-white whitespace-pre-wrap flex-1">{note.text}</p>
+                  <button
+                    onClick={() => handleDeleteNote(index)}
+                    className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
+                    title="Delete note"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-xs text-yellow-600/70 mt-2">{formatNoteDate(note.timestamp)}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

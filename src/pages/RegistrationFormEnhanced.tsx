@@ -85,6 +85,26 @@ export default function RegistrationFormEnhanced() {
   const [clientSecret, setClientSecret] = useState<string>('')
   const [step, setStep] = useState<'form' | 'payment'>('form')
 
+  // Load saved form data from localStorage
+  const getSavedFormData = () => {
+    try {
+      const saved = localStorage.getItem('registration_form_draft')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // Check if saved data is less than 24 hours old
+        if (parsed._savedAt && Date.now() - parsed._savedAt < 24 * 60 * 60 * 1000) {
+          const { _savedAt, ...formData } = parsed
+          return formData
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load saved form data:', e)
+    }
+    return null
+  }
+
+  const savedData = getSavedFormData()
+
   const {
     register,
     control,
@@ -93,7 +113,7 @@ export default function RegistrationFormEnhanced() {
     formState: { errors, isSubmitting },
   } = useForm<MultiChildFormData>({
     resolver: zodResolver(multiChildFormSchema),
-    defaultValues: {
+    defaultValues: savedData || {
       children: [defaultChild],
       permissionPhotos: false,
       permissionHealth: false,
@@ -106,6 +126,22 @@ export default function RegistrationFormEnhanced() {
       permissionAppWaiver: false,
     },
   })
+
+  // Auto-save form data to localStorage
+  const formValues = watch()
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem('registration_form_draft', JSON.stringify({
+          ...formValues,
+          _savedAt: Date.now()
+        }))
+      } catch (e) {
+        // Ignore storage errors
+      }
+    }, 1000) // Debounce by 1 second
+    return () => clearTimeout(timeoutId)
+  }, [formValues])
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -218,8 +254,11 @@ export default function RegistrationFormEnhanced() {
     }
 
     try {
-      // If total is 0 (free camp), skip payment and submit directly
-      if (totalAmount === 0) {
+      // Check if this is a waitlist submission
+      const isWaitlist = selectedCamp.maxSpots - selectedCamp.spotsTaken <= 0 && selectedCamp.waitlistEnabled
+      
+      // If total is 0 (free camp) or waitlist, skip payment and submit directly
+      if (totalAmount === 0 || isWaitlist) {
         const response = await fetch('/api/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -227,8 +266,9 @@ export default function RegistrationFormEnhanced() {
             ...data,
             campId: selectedCamp.id,
             selectedItems: Object.keys(selectedItems).filter(k => selectedItems[parseInt(k)]).map(k => parseInt(k)),
-            totalAmount: 0,
-            paymentStatus: 'free',
+            totalAmount: isWaitlist ? 0 : 0,
+            paymentStatus: isWaitlist ? 'pending' : 'free',
+            registrationStatus: isWaitlist ? 'waitlist' : 'confirmed',
           }),
         })
 
@@ -237,18 +277,23 @@ export default function RegistrationFormEnhanced() {
           throw new Error(errorData.error || 'Registration failed')
         }
 
+        localStorage.removeItem('registration_form_draft')
         setSubmitted(true)
         return
       }
 
       // Otherwise, create payment intent
+      const selectedItemIds = Object.keys(selectedItems)
+        .filter(k => selectedItems[parseInt(k)])
+        .map(k => parseInt(k))
+      
       const paymentRes = await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: Math.round(totalAmount * 100),
-          currency: 'aed',
           campId: selectedCamp.id,
+          selectedItems: selectedItemIds,
+          email: data.email,
           childrenCount: data.children.length,
         }),
       })
@@ -257,6 +302,28 @@ export default function RegistrationFormEnhanced() {
 
       if (!paymentRes.ok) {
         throw new Error(paymentData.error || 'Failed to create payment')
+      }
+
+      // If somehow free (e.g., discount made it free), submit directly
+      if (paymentData.isFree || !paymentData.clientSecret) {
+        const response = await fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            campId: selectedCamp.id,
+            selectedItems: selectedItemIds,
+            totalAmount: 0,
+            paymentStatus: 'free',
+          }),
+        })
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Registration failed')
+        }
+        localStorage.removeItem('registration_form_draft')
+        setSubmitted(true)
+        return
       }
 
       setClientSecret(paymentData.clientSecret)
@@ -306,7 +373,10 @@ export default function RegistrationFormEnhanced() {
         <PaymentForm 
           totalAmount={totalAmount}
           childCount={fields.length}
-          onSuccess={() => setSubmitted(true)}
+          onSuccess={() => {
+            localStorage.removeItem('registration_form_draft')
+            setSubmitted(true)
+          }}
           onBack={() => setStep('form')}
         />
       </Elements>
@@ -356,11 +426,25 @@ export default function RegistrationFormEnhanced() {
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
-                    {isFull ? (
-                      <span className="text-red-400 text-sm font-bold">SOLD OUT</span>
-                    ) : (
-                      <span className="text-green-400 text-sm">{spotsLeft} spots left</span>
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                      {camp.registrationStatus === 'paused' && (
+                        <span className="text-yellow-400 text-sm font-bold">⏸️ PAUSED</span>
+                      )}
+                      {camp.registrationStatus === 'closed' && (
+                        <span className="text-red-400 text-sm font-bold">🔒 CLOSED</span>
+                      )}
+                      {camp.registrationStatus !== 'closed' && camp.registrationStatus !== 'paused' && (
+                        isFull ? (
+                          camp.waitlistEnabled ? (
+                            <span className="text-yellow-400 text-sm font-bold">📋 WAITLIST</span>
+                          ) : (
+                            <span className="text-red-400 text-sm font-bold">SOLD OUT</span>
+                          )
+                        ) : (
+                          <span className="text-green-400 text-sm">{spotsLeft} spots left</span>
+                        )
+                      )}
+                    </div>
                   </div>
                   <p className="text-gray-400 text-sm mb-2">{camp.description}</p>
                   <div className="flex gap-4 text-xs text-gray-500">
@@ -384,15 +468,51 @@ export default function RegistrationFormEnhanced() {
               <div className="flex flex-wrap gap-4 text-sm text-gray-400">
                 <span>📅 {selectedCamp.startDate} - {selectedCamp.endDate}</span>
                 <span>👥 Ages {selectedCamp.ageMin}-{selectedCamp.ageMax}</span>
-                <span className="text-green-400">{selectedCamp.maxSpots - selectedCamp.spotsTaken} spots left</span>
+                {selectedCamp.registrationStatus === 'open' && (
+                  <span className="text-green-400">{selectedCamp.maxSpots - selectedCamp.spotsTaken} spots left</span>
+                )}
               </div>
-              {selectedCamp.siblingDiscountEnabled && (
+              {selectedCamp.siblingDiscountEnabled && selectedCamp.registrationStatus === 'open' && (
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-400">
                   🎉 Sibling discount available: 
                   {selectedCamp.siblingDiscountType === 'percentage' 
                     ? ` ${selectedCamp.siblingDiscountAmount}% off`
                     : ` AED ${selectedCamp.siblingDiscountAmount} off`
                   } per additional child
+                </div>
+              )}
+              
+              {/* Registration Status Messages */}
+              {selectedCamp.registrationStatus === 'paused' && (
+                <div className="mt-4 p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+                  <div className="flex items-center gap-2 text-yellow-400 font-bold mb-1">
+                    ⏸️ Registration Paused
+                  </div>
+                  <p className="text-yellow-200/80 text-sm">
+                    Registration for this camp is temporarily paused. Please check back later or contact us for more information.
+                  </p>
+                </div>
+              )}
+              
+              {selectedCamp.registrationStatus === 'closed' && (
+                <div className="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-400 font-bold mb-1">
+                    🔒 Registration Closed
+                  </div>
+                  <p className="text-red-200/80 text-sm">
+                    Registration for this camp is now closed.
+                  </p>
+                </div>
+              )}
+              
+              {selectedCamp.registrationStatus === 'open' && selectedCamp.maxSpots - selectedCamp.spotsTaken <= 0 && selectedCamp.waitlistEnabled && (
+                <div className="mt-4 p-4 bg-purple-900/30 border border-purple-700 rounded-lg">
+                  <div className="flex items-center gap-2 text-purple-400 font-bold mb-1">
+                    📋 Join Waitlist
+                  </div>
+                  <p className="text-purple-200/80 text-sm">
+                    This camp is currently full, but you can join the waitlist. {selectedCamp.waitlistMessage || "We'll contact you if a spot opens up."}
+                  </p>
                 </div>
               )}
             </div>
@@ -639,18 +759,30 @@ export default function RegistrationFormEnhanced() {
             {errors.permissionAppWaiver && <p className="error-message">{errors.permissionAppWaiver.message}</p>}
           </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="btn-primary w-full py-4 text-lg"
-          >
-            {isSubmitting 
-              ? 'Processing...' 
-              : totalAmount === 0 
-                ? 'Complete Registration - Free'
-                : `Proceed to Payment - AED ${totalAmount.toFixed(2)}`
-            }
-          </button>
+          {selectedCamp?.registrationStatus === 'paused' ? (
+            <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 text-center">
+              <span className="text-yellow-400 font-bold">⏸️ Registration is currently paused</span>
+            </div>
+          ) : selectedCamp?.registrationStatus === 'closed' ? (
+            <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 text-center">
+              <span className="text-red-400 font-bold">🔒 Registration is closed</span>
+            </div>
+          ) : (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary w-full py-4 text-lg"
+            >
+              {isSubmitting 
+                ? 'Processing...' 
+                : selectedCamp && selectedCamp.maxSpots - selectedCamp.spotsTaken <= 0 && selectedCamp.waitlistEnabled
+                  ? '📋 Join Waitlist'
+                  : totalAmount === 0 
+                    ? 'Complete Registration - Free'
+                    : `Proceed to Payment - AED ${totalAmount.toFixed(2)}`
+              }
+            </button>
+          )}
         </form>
       )}
     </div>

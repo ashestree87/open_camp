@@ -90,6 +90,10 @@ export interface Camp {
   maxSpots: number
   spotsTaken: number
   status: 'active' | 'full' | 'archived'
+  // Registration controls
+  registrationStatus: 'open' | 'paused' | 'closed'
+  waitlistEnabled: boolean
+  waitlistMessage: string
   // Sibling discount settings
   siblingDiscountEnabled: boolean
   siblingDiscountAmount: number
