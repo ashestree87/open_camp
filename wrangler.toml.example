@@ -1,0 +1,57 @@
+# Open Camp - Kids Camp Registration
+# Cloudflare Worker Configuration
+# 
+# SETUP INSTRUCTIONS:
+# 1. Copy this file to wrangler.toml: cp wrangler.toml.example wrangler.toml
+# 2. Replace all placeholder values with your actual IDs
+# 3. Never commit wrangler.toml to version control
+
+name = "open-camp"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"  # Get from: wrangler whoami
+
+# For Pages deployment (comment out 'main' above and use this instead)
+# pages_build_output_dir = "dist"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "open-camp-db"
+database_id = "YOUR_D1_DATABASE_ID"  # Get from: wrangler d1 create open-camp-db
+
+# KV Namespace binding
+[[kv_namespaces]]
+binding = "KV"
+id = "YOUR_KV_NAMESPACE_ID"  # Get from: wrangler kv namespace create open-camp-kv
+
+# Preview KV Namespace (for local development)
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "YOUR_PREVIEW_KV_ID"
+# preview_id = "YOUR_PREVIEW_KV_ID"
+
+# Environment variables
+[vars]
+ALLOWED_ORIGIN = "https://your-domain.pages.dev"  # Update with your Pages domain
+
+# Secrets (set via wrangler secret put):
+# - RESEND_API_KEY: Your Resend API key for email notifications
+# - STRIPE_SECRET_KEY: Your Stripe secret key for payments
+# - STRIPE_WEBHOOK_SECRET: Your Stripe webhook secret (optional)
+
+# Production environment
+[env.production]
+vars = { ALLOWED_ORIGIN = "https://your-domain.pages.dev" }
+
+# Development environment
+[env.development]
+vars = { ALLOWED_ORIGIN = "*" }
+
+# Pages Functions Configuration
+# Note: Pages Functions inherit bindings from the project settings in Cloudflare Dashboard
+# The bindings configured above (D1 and KV) need to be added to the Pages project:
+# Go to: Cloudflare Dashboard > Pages > open-camp > Settings > Functions
+# Add D1 binding: DB -> open-camp-db
+# Add KV binding: KV -> open-camp-kv
+
