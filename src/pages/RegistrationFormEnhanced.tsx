@@ -123,17 +123,45 @@ export default function RegistrationFormEnhanced() {
       .then(([campsData, pricingData]) => {
         const activeCamps = campsData.camps?.filter((c: Camp) => c.status === 'active') || []
         setCamps(activeCamps)
-        setPricingItems(pricingData.items || [])
+        const allPricingItems = pricingData.items || []
+        setPricingItems(allPricingItems)
         
         if (campId) {
           const camp = activeCamps.find((c: Camp) => c.id === parseInt(campId))
-          if (camp) setSelectedCamp(camp)
+          if (camp) {
+            setSelectedCamp(camp)
+            // Auto-select required items for this camp
+            const requiredItems: { [key: number]: boolean } = {}
+            allPricingItems
+              .filter((item: PricingItem) => item.campId === camp.id && item.isRequired)
+              .forEach((item: PricingItem) => { requiredItems[item.id] = true })
+            setSelectedItems(requiredItems)
+          }
         }
         
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [campId])
+  
+  // Auto-select required items when camp changes
+  useEffect(() => {
+    if (selectedCamp) {
+      const requiredItems: { [key: number]: boolean } = {}
+      pricingItems
+        .filter(item => item.campId === selectedCamp.id && item.isRequired)
+        .forEach(item => { requiredItems[item.id] = true })
+      // Merge with existing selections, keeping required items selected
+      setSelectedItems(prev => ({
+        ...Object.fromEntries(
+          Object.entries(prev).filter(([id]) => 
+            pricingItems.find(item => item.id === parseInt(id))?.campId === selectedCamp.id
+          )
+        ),
+        ...requiredItems
+      }))
+    }
+  }, [selectedCamp, pricingItems])
 
   // Calculate total - pricing per child with sibling discount
   useEffect(() => {
@@ -190,6 +218,30 @@ export default function RegistrationFormEnhanced() {
     }
 
     try {
+      // If total is 0 (free camp), skip payment and submit directly
+      if (totalAmount === 0) {
+        const response = await fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            campId: selectedCamp.id,
+            selectedItems: Object.keys(selectedItems).filter(k => selectedItems[parseInt(k)]).map(k => parseInt(k)),
+            totalAmount: 0,
+            paymentStatus: 'free',
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Registration failed')
+        }
+
+        setSubmitted(true)
+        return
+      }
+
+      // Otherwise, create payment intent
       const paymentRes = await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -463,18 +515,32 @@ export default function RegistrationFormEnhanced() {
                 {campPricingItems.map((item) => (
                   <label
                     key={item.id}
-                    className="flex items-start gap-3 p-3 rounded border border-gray-700 hover:border-brand-primary/50 cursor-pointer"
+                    className={`flex items-start gap-3 p-3 rounded border transition-all ${
+                      item.isRequired 
+                        ? 'border-brand-primary/30 bg-brand-primary/5 cursor-default' 
+                        : 'border-gray-700 hover:border-brand-primary/50 cursor-pointer'
+                    }`}
                   >
                     <input
                       type="checkbox"
                       checked={!!selectedItems[item.id]}
-                      onChange={(e) =>
-                        setSelectedItems({ ...selectedItems, [item.id]: e.target.checked })
-                      }
-                      className="mt-1"
+                      disabled={item.isRequired}
+                      onChange={(e) => {
+                        if (!item.isRequired) {
+                          setSelectedItems({ ...selectedItems, [item.id]: e.target.checked })
+                        }
+                      }}
+                      className={`mt-1 ${item.isRequired ? 'opacity-60' : ''}`}
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-white">{item.name}</div>
+                      <div className="font-medium text-white flex items-center gap-2">
+                        {item.name}
+                        {item.isRequired && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-brand-primary/20 text-brand-primary">
+                            Required
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-gray-400">{item.description}</div>
                     </div>
                     <div className={`font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
@@ -578,7 +644,12 @@ export default function RegistrationFormEnhanced() {
             disabled={isSubmitting}
             className="btn-primary w-full py-4 text-lg"
           >
-            {isSubmitting ? 'Processing...' : `Proceed to Payment - AED ${totalAmount.toFixed(2)}`}
+            {isSubmitting 
+              ? 'Processing...' 
+              : totalAmount === 0 
+                ? 'Complete Registration - Free'
+                : `Proceed to Payment - AED ${totalAmount.toFixed(2)}`
+            }
           </button>
         </form>
       )}

@@ -256,7 +256,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
     setCamps(data.camps || [])
   }
 
-  const handleSubmit = async (campData: Partial<Camp>, pricingItems: PricingItem[]) => {
+  const handleSubmit = async (campData: Partial<Camp>, pricingItems: PricingItem[], deselectedItems: PricingItem[] = []) => {
     const url = editingCamp ? `/api/camps/${editingCamp.id}` : '/api/camps'
     const method = editingCamp ? 'PUT' : 'POST'
     
@@ -282,7 +282,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
       
       const campId = editingCamp?.id || data.id
       
-      // Then save/update pricing items for this camp
+      // Save/update pricing items that are selected for this camp
       for (const item of pricingItems) {
         const isExisting = item.id < 1000000000000 // Temporary IDs are Date.now() timestamps
         const pricingUrl = isExisting ? `/api/pricing/${item.id}` : '/api/pricing'
@@ -297,6 +297,20 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
           body: JSON.stringify({
             ...item,
             campId: campId,
+          }),
+        })
+      }
+      
+      // Unassign deselected items (set their campId to null)
+      for (const item of deselectedItems) {
+        await fetch(`/api/pricing/${item.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            campId: null,
           }),
         })
       }
@@ -443,7 +457,7 @@ function CampForm({
 }: { 
   camp: Camp | null
   token: string
-  onSubmit: (data: Partial<Camp>, pricingItems: PricingItem[]) => void
+  onSubmit: (data: Partial<Camp>, pricingItems: PricingItem[], deselectedItems: PricingItem[]) => void
   onCancel: () => void
 }) {
   const [formData, setFormData] = useState({
@@ -473,9 +487,12 @@ function CampForm({
     isRequired: false,
   })
 
+  // Track original camp items for detecting deselections
+  const [originalCampItemIds, setOriginalCampItemIds] = useState<Set<number>>(new Set())
+  
   // Load all pricing items
   useEffect(() => {
-    fetch('/api/pricing')
+    fetch('/api/pricing?includeArchived=true')
       .then(r => r.json())
       .then(data => {
         const items = data.items || []
@@ -487,6 +504,7 @@ function CampForm({
             .filter((item: PricingItem) => item.campId === camp.id)
             .map((item: PricingItem) => item.id)
           setSelectedItemIds(new Set(campItemIds))
+          setOriginalCampItemIds(new Set(campItemIds)) // Track original selection
         }
       })
   }, [camp])
@@ -505,6 +523,13 @@ function CampForm({
   const getSelectedItems = (): PricingItem[] => {
     const existingSelected = allPricingItems.filter(item => selectedItemIds.has(item.id))
     return [...existingSelected, ...newItems]
+  }
+  
+  // Get items that were deselected (were assigned to this camp but now unchecked)
+  const getDeselectedItems = (): PricingItem[] => {
+    return allPricingItems.filter(item => 
+      originalCampItemIds.has(item.id) && !selectedItemIds.has(item.id)
+    )
   }
 
   const handleAddPricing = () => {
@@ -534,7 +559,7 @@ function CampForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(formData, getSelectedItems())
+    onSubmit(formData, getSelectedItems(), getDeselectedItems())
   }
 
   return (
@@ -1197,88 +1222,584 @@ function PricingForm({
 
 // Registrations Tab (simplified)
 function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: string; selectedCampId: number | null; onClearFilter: () => void }) {
-  const [registrations, setRegistrations] = useState<any[]>([])
   const [allRegistrations, setAllRegistrations] = useState<any[]>([])
-  const [campName, setCampName] = useState<string>('')
+  const [camps, setCamps] = useState<Camp[]>([])
+  const [filterCampId, setFilterCampId] = useState<number | null>(selectedCampId)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedRegistration, setSelectedRegistration] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showArchivedCamps, setShowArchivedCamps] = useState(false)
 
   useEffect(() => {
-    fetch('/api/registrations', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(data => {
-        const regs = data.registrations || []
-        setAllRegistrations(regs)
-        setRegistrations(regs)
+    setFilterCampId(selectedCampId)
+  }, [selectedCampId])
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/registrations', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+      fetch('/api/camps?includeArchived=true').then(r => r.json()),
+    ])
+      .then(([regsData, campsData]) => {
+        setAllRegistrations(regsData.registrations || [])
+        setCamps(campsData.camps || [])
+        setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [token])
 
-  useEffect(() => {
-    if (selectedCampId) {
-      const filtered = allRegistrations.filter(reg => reg.camp_id === selectedCampId)
-      setRegistrations(filtered)
-      
-      // Get camp name
-      fetch('/api/camps')
-        .then(r => r.json())
-        .then(data => {
-          const camp = data.camps?.find((c: any) => c.id === selectedCampId)
-          setCampName(camp?.name || 'Unknown Camp')
-        })
-    } else {
-      setRegistrations(allRegistrations)
-      setCampName('')
+  // Filter camps for dropdown
+  const dropdownCamps = showArchivedCamps 
+    ? camps 
+    : camps.filter(c => c.status !== 'archived')
+
+  // Filter registrations
+  const filteredRegistrations = allRegistrations.filter(reg => {
+    const matchesCamp = !filterCampId || reg.camp_id === filterCampId
+    const matchesSearch = !searchQuery || 
+      (reg.child_full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (reg.parent_full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (reg.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (reg.phone || '').includes(searchQuery)
+    return matchesCamp && matchesSearch
+  })
+
+  // Get stats - handle null/undefined payment_status
+  const stats = {
+    total: filteredRegistrations.length,
+    paid: filteredRegistrations.filter(r => {
+      const status = r.payment_status
+      return status === 'paid' || status === 'free'
+    }).length,
+    pending: filteredRegistrations.filter(r => {
+      const status = r.payment_status
+      return status === null || status === undefined || status === '' || status === 'pending'
+    }).length,
+    revenue: filteredRegistrations.reduce((sum, r) => sum + (parseFloat(r.total_amount) || 0), 0),
+  }
+
+  const getCampName = (campId: number) => camps.find(c => c.id === campId)?.name || 'Unknown'
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleDateString('en-GB', { 
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    })
+  }
+
+  const getPaymentBadge = (status: string | null | undefined) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-900/50 text-green-400'
+      case 'free':
+        return 'bg-blue-900/50 text-blue-400'
+      case 'pending':
+      case null:
+      case undefined:
+      case '':
+      default:
+        return 'bg-yellow-900/50 text-yellow-400'
     }
-  }, [selectedCampId, allRegistrations])
+  }
+  
+  const getPaymentLabel = (status: string | null | undefined) => {
+    if (!status || status === '') return 'pending'
+    return status
+  }
+
+  if (loading) {
+    return <div className="text-center text-gray-400 py-8">Loading registrations...</div>
+  }
+
+  // Detail View
+  if (selectedRegistration) {
+    return (
+      <RegistrationDetail 
+        registration={selectedRegistration}
+        camps={camps}
+        token={token}
+        onBack={() => setSelectedRegistration(null)}
+        onUpdate={(updated) => {
+          setSelectedRegistration(updated)
+          setAllRegistrations(prev => prev.map(r => r.id === updated.id ? updated : r))
+        }}
+      />
+    )
+  }
 
   return (
     <div>
+      {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="font-heading text-xl font-bold text-white uppercase">
-          Registrations {selectedCampId && `- ${campName}`} ({registrations.length})
+          Registrations ({stats.total})
         </h2>
-        {selectedCampId && (
-          <button onClick={onClearFilter} className="btn-secondary text-sm">
-            Show All Camps
-          </button>
-        )}
       </div>
       
-      {registrations.length === 0 ? (
+      {/* Filters Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div>
+          <select
+            value={filterCampId || ''}
+            onChange={(e) => {
+              const val = e.target.value ? parseInt(e.target.value) : null
+              setFilterCampId(val)
+              if (!val) onClearFilter()
+            }}
+            className="input-field py-2 px-3 text-sm w-full"
+          >
+            <option value="">All Camps</option>
+            {dropdownCamps.map(camp => (
+              <option key={camp.id} value={camp.id}>
+                {camp.name} {camp.status === 'archived' ? '(archived)' : ''}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer mt-2">
+            <input
+              type="checkbox"
+              checked={showArchivedCamps}
+              onChange={(e) => setShowArchivedCamps(e.target.checked)}
+              className="w-3 h-3"
+            />
+            Include archived camps
+          </label>
+        </div>
+        <div className="md:col-span-2">
+          <input
+            type="text"
+            placeholder="Search name, email, phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input-field py-2 px-3 text-sm w-full"
+          />
+        </div>
+      </div>
+
+      {/* Stats Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="card text-center py-3">
+          <div className="text-2xl font-bold text-white">{stats.total}</div>
+          <div className="text-xs text-gray-500 uppercase">Total</div>
+        </div>
+        <div className="card text-center py-3">
+          <div className="text-2xl font-bold text-green-400">{stats.paid}</div>
+          <div className="text-xs text-gray-500 uppercase">Paid/Free</div>
+        </div>
+        <div className="card text-center py-3">
+          <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
+          <div className="text-xs text-gray-500 uppercase">Pending</div>
+        </div>
+        <div className="card text-center py-3">
+          <div className="text-2xl font-bold text-brand-primary">AED {stats.revenue.toFixed(0)}</div>
+          <div className="text-xs text-gray-500 uppercase">Revenue</div>
+        </div>
+      </div>
+      
+      {/* Registrations List */}
+      {filteredRegistrations.length === 0 ? (
         <div className="card text-center text-gray-400 py-8">
-          No registrations {selectedCampId ? 'for this camp' : 'yet'}
+          {searchQuery ? 'No registrations match your search' : 'No registrations yet'}
         </div>
       ) : (
         <div className="space-y-2">
-          {registrations.map((reg) => (
-            <div key={reg.id} className="card">
-              <div className="flex justify-between">
-                <div>
-                  <div className="font-medium text-white">{reg.childFullName || reg.child_full_name}</div>
-                  <div className="text-sm text-gray-400">
-                    {reg.parentFullName || reg.parent_full_name} • {reg.email}
+          {filteredRegistrations.map((reg) => (
+            <div 
+              key={reg.id} 
+              onClick={() => setSelectedRegistration(reg)}
+              className="card cursor-pointer hover:border-brand-primary/50 transition-all"
+            >
+              <div className="flex justify-between items-center">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="font-medium text-white">{reg.child_full_name || 'Unknown'}</div>
+                    <span className={`text-xs px-2 py-0.5 rounded ${getPaymentBadge(reg.payment_status)}`}>
+                      {getPaymentLabel(reg.payment_status)}
+                    </span>
                   </div>
-                  {!selectedCampId && (
-                    <div className="text-xs text-gray-500 mt-1">{reg.campName || 'Camp ID: ' + reg.camp_id}</div>
-                  )}
+                  <div className="text-sm text-gray-400 mt-1">
+                    {reg.parent_full_name} • {reg.email} • {reg.phone}
+                  </div>
+                  <div className="flex gap-4 text-xs text-gray-500 mt-1">
+                    <span>{getCampName(reg.camp_id)}</span>
+                    <span>{formatDate(reg.created_at)}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold text-white">
-                    AED {(reg.total_amount || reg.totalAmount || 0).toFixed(2)}
+                    AED {(reg.total_amount || 0).toFixed(2)}
                   </div>
-                  <div className={`text-xs px-2 py-1 rounded ${
-                    (reg.payment_status || reg.paymentStatus) === 'paid' 
-                      ? 'bg-green-900/50 text-green-400' 
-                      : 'bg-yellow-900/50 text-yellow-400'
-                  }`}>
-                    {reg.payment_status || reg.paymentStatus || 'pending'}
-                  </div>
+                  <div className="text-xs text-gray-500">Click to view →</div>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Registration Detail Component with Edit functionality
+function RegistrationDetail({ 
+  registration, 
+  camps, 
+  token, 
+  onBack, 
+  onUpdate 
+}: { 
+  registration: any
+  camps: Camp[]
+  token: string
+  onBack: () => void
+  onUpdate: (updated: any) => void
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formData, setFormData] = useState(registration)
+
+  const getCampName = (campId: number) => camps.find(c => c.id === campId)?.name || 'Unknown'
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleDateString('en-GB', { 
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    })
+  }
+
+  const getPaymentBadge = (status: string | null | undefined) => {
+    switch (status) {
+      case 'paid': return 'bg-green-900/50 text-green-400'
+      case 'free': return 'bg-blue-900/50 text-blue-400'
+      default: return 'bg-yellow-900/50 text-yellow-400'
+    }
+  }
+
+  const getPaymentLabel = (status: string | null | undefined) => !status || status === '' ? 'pending' : status
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/registrations/${registration.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      })
+      
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to update')
+      }
+      
+      onUpdate(formData)
+      setIsEditing(false)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateField = (field: string, value: any) => {
+    setFormData((prev: any) => ({ ...prev, [field]: value }))
+  }
+
+  // Clickable phone link
+  const PhoneLink = ({ phone, className = '' }: { phone: string | null; className?: string }) => {
+    if (!phone) return <span className="text-gray-500">-</span>
+    return (
+      <a href={`tel:${phone}`} className={`text-brand-primary hover:underline ${className}`}>
+        📞 {phone}
+      </a>
+    )
+  }
+
+  // Clickable email link
+  const EmailLink = ({ email, className = '' }: { email: string | null; className?: string }) => {
+    if (!email) return <span className="text-gray-500">-</span>
+    return (
+      <a href={`mailto:${email}`} className={`text-brand-primary hover:underline ${className}`}>
+        ✉️ {email}
+      </a>
+    )
+  }
+
+  // Permission display
+  const PermissionItem = ({ label, field }: { label: string; field: string }) => {
+    const value = formData[field]
+    if (isEditing) {
+      return (
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={value === 1 || value === true}
+            onChange={(e) => updateField(field, e.target.checked ? 1 : 0)}
+            className="w-4 h-4"
+          />
+          <span className="text-gray-300 text-sm">{label}</span>
+        </label>
+      )
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <span className={`w-5 h-5 rounded flex items-center justify-center text-xs ${
+          value === 1 || value === true ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+        }`}>
+          {value === 1 || value === true ? '✓' : '✗'}
+        </span>
+        <span className="text-gray-300 text-sm">{label}</span>
+      </div>
+    )
+  }
+
+  // Editable field component
+  const Field = ({ label, field, type = 'text', options }: { label: string; field: string; type?: string; options?: string[] }) => {
+    const value = formData[field] || ''
+    if (isEditing) {
+      if (options) {
+        return (
+          <div>
+            <span className="text-gray-500">{label}:</span>
+            <select
+              value={value}
+              onChange={(e) => updateField(field, e.target.value)}
+              className="input-field ml-2 py-1 px-2 text-sm inline-block w-auto"
+            >
+              {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+        )
+      }
+      if (type === 'textarea') {
+        return (
+          <div>
+            <span className="text-gray-500 block mb-1">{label}:</span>
+            <textarea
+              value={value}
+              onChange={(e) => updateField(field, e.target.value)}
+              className="input-field w-full text-sm"
+              rows={3}
+            />
+          </div>
+        )
+      }
+      return (
+        <div>
+          <span className="text-gray-500">{label}:</span>
+          <input
+            type={type}
+            value={value}
+            onChange={(e) => updateField(field, e.target.value)}
+            className="input-field ml-2 py-1 px-2 text-sm inline-block w-auto"
+          />
+        </div>
+      )
+    }
+    
+    // Display mode with special handling for phone/email
+    if (field === 'email') {
+      return <div><span className="text-gray-500">{label}:</span> <EmailLink email={value} className="ml-2" /></div>
+    }
+    if (field === 'phone' || field.includes('phone')) {
+      return <div><span className="text-gray-500">{label}:</span> <PhoneLink phone={value} className="ml-2" /></div>
+    }
+    return <div><span className="text-gray-500">{label}:</span> <span className="text-white ml-2">{value || '-'}</span></div>
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <button onClick={onBack} className="text-brand-primary hover:underline flex items-center gap-2">
+          ← Back to Registrations
+        </button>
+        <div className="flex gap-2">
+          {isEditing ? (
+            <>
+              <button onClick={() => { setFormData(registration); setIsEditing(false) }} className="btn-secondary text-sm">
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setIsEditing(true)} className="btn-primary text-sm">
+              ✏️ Edit Registration
+            </button>
+          )}
+        </div>
+      </div>
+      
+      <div className="card">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-700">
+          <div>
+            <h2 className="font-heading text-2xl font-bold text-white">{formData.child_full_name || 'Unknown'}</h2>
+            <p className="text-gray-400">{getCampName(formData.camp_id)}</p>
+            <p className="text-gray-500 text-sm mt-1">Registered: {formatDate(formData.created_at)}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-white">AED {(formData.total_amount || 0).toFixed(2)}</div>
+            {isEditing ? (
+              <select
+                value={formData.payment_status || 'pending'}
+                onChange={(e) => updateField('payment_status', e.target.value)}
+                className="input-field py-1 px-2 text-sm mt-1"
+              >
+                <option value="pending">pending</option>
+                <option value="paid">paid</option>
+                <option value="free">free</option>
+              </select>
+            ) : (
+              <span className={`text-sm px-3 py-1 rounded ${getPaymentBadge(formData.payment_status)}`}>
+                {getPaymentLabel(formData.payment_status)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Contact Actions */}
+        {!isEditing && (formData.email || formData.phone) && (
+          <div className="flex gap-3 mb-6 p-3 bg-gray-800/50 rounded">
+            {formData.email && (
+              <a href={`mailto:${formData.email}`} className="btn-secondary text-sm flex items-center gap-2">
+                ✉️ Email Parent
+              </a>
+            )}
+            {formData.phone && (
+              <a href={`tel:${formData.phone}`} className="btn-secondary text-sm flex items-center gap-2">
+                📞 Call Parent
+              </a>
+            )}
+            {formData.emergency1_phone && (
+              <a href={`tel:${formData.emergency1_phone}`} className="btn-secondary text-sm flex items-center gap-2">
+                🚨 Emergency 1
+              </a>
+            )}
+            {formData.emergency2_phone && (
+              <a href={`tel:${formData.emergency2_phone}`} className="btn-secondary text-sm flex items-center gap-2">
+                🚨 Emergency 2
+              </a>
+            )}
+          </div>
+        )}
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Child Info */}
+          <div className="space-y-3">
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Child Information</h3>
+            <Field label="Full Name" field="child_full_name" />
+            <Field label="Date of Birth" field="child_dob" type="date" />
+            <Field label="Can Walk Home Alone" field="walk_home_alone" options={['yes', 'no']} />
+          </div>
+
+          {/* Parent Info */}
+          <div className="space-y-3">
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Parent/Guardian</h3>
+            <Field label="Full Name" field="parent_full_name" />
+            <Field label="Email" field="email" type="email" />
+            <Field label="Phone" field="phone" type="tel" />
+            <Field label="Address" field="address" />
+          </div>
+
+          {/* Emergency Contact 1 */}
+          <div className="space-y-3">
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Emergency Contact 1</h3>
+            <Field label="Name" field="emergency1_name" />
+            <Field label="Phone" field="emergency1_phone" type="tel" />
+            <Field label="Relationship" field="emergency1_relationship" />
+          </div>
+
+          {/* Emergency Contact 2 */}
+          <div className="space-y-3">
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Emergency Contact 2</h3>
+            <Field label="Name" field="emergency2_name" />
+            <Field label="Phone" field="emergency2_phone" type="tel" />
+            <Field label="Relationship" field="emergency2_relationship" />
+          </div>
+        </div>
+
+        {/* Medical & Health Information */}
+        <div className="mt-6 space-y-3">
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Medical & Health Information</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Field label="Medical Conditions" field="has_medical_conditions" options={['no', 'yes']} />
+              {formData.has_medical_conditions === 'yes' && (
+                <Field label="Details" field="medical_conditions_details" type="textarea" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <Field label="Additional Needs" field="has_additional_needs" options={['no', 'yes']} />
+              {formData.has_additional_needs === 'yes' && (
+                <Field label="Details" field="additional_needs_details" type="textarea" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <Field label="Allergies" field="has_allergies" options={['no', 'yes']} />
+              {formData.has_allergies === 'yes' && (
+                <Field label="Details" field="allergies_details" type="textarea" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <Field label="Medication" field="has_medication" options={['no', 'yes']} />
+              {formData.has_medication === 'yes' && (
+                <Field label="Details" field="medication_details" type="textarea" />
+              )}
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Field label="Further Info" field="has_further_info" options={['no', 'yes']} />
+              {formData.has_further_info === 'yes' && (
+                <Field label="Details" field="further_info_details" type="textarea" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Authorised Collectors */}
+        <div className="mt-6 space-y-3">
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Authorised Collectors</h3>
+          {isEditing ? (
+            <textarea
+              value={formData.authorised_collectors || ''}
+              onChange={(e) => updateField('authorised_collectors', e.target.value)}
+              className="input-field w-full"
+              rows={3}
+              placeholder="One person per line"
+            />
+          ) : (
+            <div className="text-white bg-gray-800/50 p-3 rounded whitespace-pre-line">
+              {formData.authorised_collectors || 'None specified'}
+            </div>
+          )}
+        </div>
+
+        {/* Permissions & Consent */}
+        <div className="mt-6 space-y-3">
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Permissions & Consent</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <PermissionItem label="Photos/Videos" field="permission_photos" />
+            <PermissionItem label="Emergency Medical Treatment" field="permission_health" />
+            <PermissionItem label="Camp Activities" field="permission_activities" />
+            <PermissionItem label="Off-site Visits" field="permission_locations" />
+            <PermissionItem label="Snacks & Meals" field="permission_meals" />
+            <PermissionItem label="Bathroom Independence" field="permission_bathroom" />
+            <PermissionItem label="First Aid" field="permission_first_aid" />
+            <PermissionItem label="Sports Equipment" field="permission_equipment" />
+            <PermissionItem label="Terms & Conditions" field="permission_app_waiver" />
+          </div>
+        </div>
+
+        {/* Registration Meta */}
+        <div className="mt-6 pt-4 border-t border-gray-700 flex flex-wrap justify-between gap-4 text-sm text-gray-500">
+          <span>Registration ID: {formData.id}</span>
+          <span>Camp ID: {formData.camp_id}</span>
+          {formData.payment_reference && <span>Payment Ref: {formData.payment_reference}</span>}
+          <span>Created: {formatDate(formData.created_at)}</span>
+        </div>
+      </div>
     </div>
   )
 }

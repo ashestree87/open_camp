@@ -570,7 +570,8 @@ async function handleUpdatePricing(itemId: string, request: Request, env: Env, c
     const isRequired = data.isRequired ?? data.is_required ?? (existingItem as any).is_required ?? false
     const isActive = data.isActive ?? data.is_active ?? (existingItem as any).is_active ?? true
     const displayOrder = data.displayOrder ?? data.display_order ?? (existingItem as any).display_order ?? 0
-    const campId = data.campId ?? data.camp_id ?? (existingItem as any).camp_id ?? null
+    // Special handling for campId - null is a valid value to unassign from camp
+    const campId = 'campId' in data ? data.campId : ('camp_id' in data ? data.camp_id : (existingItem as any).camp_id)
     
     console.log('Parsed values:', { name, description, amount, itemType, isRequired, isActive, displayOrder, campId })
     
@@ -975,12 +976,8 @@ async function handleGetRegistrations(request: Request, env: Env, cors: HeadersI
     
     const { results } = await env.DB.prepare(`
       SELECT 
-        r.id, r.camp_id, r.email, r.child_full_name as childFullName,
-        r.child_age as childAge, r.child_dob as childDob,
-        r.parent_full_name as parentFullName, r.address, r.phone,
-        r.total_amount as totalAmount, r.payment_status as paymentStatus,
-        r.payment_reference as paymentReference, r.created_at as createdAt,
-        c.name as campName
+        r.*,
+        c.name as camp_name
       FROM registrations r
       LEFT JOIN camps c ON r.camp_id = c.id
       ORDER BY r.created_at DESC
@@ -994,6 +991,61 @@ async function handleGetRegistrations(request: Request, env: Env, cors: HeadersI
   } catch (error) {
     console.error('Get registrations error:', error)
     return errorResponse('Failed to fetch registrations', 500, cors)
+  }
+}
+
+async function handleUpdateRegistration(regId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const data: any = await request.json()
+    
+    // Build update query dynamically for provided fields
+    const allowedFields = [
+      'child_full_name', 'child_dob', 'parent_full_name', 'email', 'phone', 'address',
+      'emergency1_name', 'emergency1_phone', 'emergency1_relationship',
+      'emergency2_name', 'emergency2_phone', 'emergency2_relationship',
+      'authorised_collectors', 'walk_home_alone',
+      'has_medical_conditions', 'medical_conditions_details',
+      'has_additional_needs', 'additional_needs_details',
+      'has_allergies', 'allergies_details',
+      'has_medication', 'medication_details',
+      'has_further_info', 'further_info_details',
+      'permission_photos', 'permission_health', 'permission_activities',
+      'permission_locations', 'permission_meals', 'permission_bathroom',
+      'permission_first_aid', 'permission_equipment', 'permission_app_waiver',
+      'payment_status', 'total_amount'
+    ]
+    
+    const updates: string[] = []
+    const values: any[] = []
+    
+    for (const field of allowedFields) {
+      if (field in data) {
+        updates.push(`${field} = ?`)
+        values.push(data[field])
+      }
+    }
+    
+    if (updates.length === 0) {
+      return errorResponse('No valid fields to update', 400, cors)
+    }
+    
+    values.push(regId)
+    
+    await env.DB.prepare(`
+      UPDATE registrations SET ${updates.join(', ')} WHERE id = ?
+    `).bind(...values).run()
+    
+    return jsonResponse({ success: true, message: 'Registration updated successfully' }, 200, cors)
+  } catch (error: any) {
+    console.error('Update registration error:', error)
+    return jsonResponse({
+      success: false,
+      error: 'Failed to update registration',
+      details: error.message
+    }, 500, cors)
   }
 }
 
@@ -1130,9 +1182,13 @@ export default {
         return handleAuth(request, env, cors)
       }
       
-      // Registrations endpoint
+      // Registrations endpoints
       if (path === '/api/registrations' && method === 'GET') {
         return handleGetRegistrations(request, env, cors)
+      }
+      if (path.match(/^\/api\/registrations\/\d+$/) && method === 'PUT') {
+        const regId = path.split('/')[3]
+        return handleUpdateRegistration(regId, request, env, cors)
       }
       
       // Admin config endpoints  
