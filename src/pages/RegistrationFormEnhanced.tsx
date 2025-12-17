@@ -143,8 +143,9 @@ export default function RegistrationFormEnhanced() {
       return
     }
 
+    // Only show pricing items specifically assigned to this camp
     const campPricingItems = pricingItems.filter(
-      item => item.campId === selectedCamp.id || item.campId === null
+      item => item.campId === selectedCamp.id
     )
 
     let itemTotal = 0
@@ -273,8 +274,9 @@ export default function RegistrationFormEnhanced() {
     )
   }
 
+  // Only show pricing items specifically assigned to this camp
   const campPricingItems = selectedCamp 
-    ? pricingItems.filter(item => item.campId === selectedCamp.id || item.campId === null)
+    ? pricingItems.filter(item => item.campId === selectedCamp.id)
     : []
 
   return (

@@ -265,15 +265,23 @@ async function verifyStripeWebhook(
 // CAMPS ENDPOINTS
 // ============================================================================
 
-async function handleGetCamps(env: Env, cors: HeadersInit): Promise<Response> {
+async function handleGetCamps(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
+    const url = new URL(request.url)
+    const includeArchived = url.searchParams.get('includeArchived') === 'true'
+    
+    const statusFilter = includeArchived 
+      ? "status IN ('active', 'full', 'archived')"
+      : "status IN ('active', 'full')"
+    
     const { results } = await env.DB.prepare(`
       SELECT 
         id, name, description, start_date, end_date,
         age_min, age_max, max_spots, spots_taken, status,
+        sibling_discount_enabled, sibling_discount_amount, sibling_discount_type,
         created_at, updated_at
       FROM camps 
-      WHERE status IN ('active', 'full')
+      WHERE ${statusFilter}
       ORDER BY start_date ASC
     `).all()
     
@@ -468,13 +476,18 @@ async function handleDeleteCamp(campId: string, request: Request, env: Env, cors
 // PRICING ENDPOINTS
 // ============================================================================
 
-async function handleGetPricing(env: Env, cors: HeadersInit): Promise<Response> {
+async function handleGetPricing(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
   try {
+    const url = new URL(request.url)
+    const includeArchived = url.searchParams.get('includeArchived') === 'true'
+    
+    const activeFilter = includeArchived ? '' : 'WHERE p.is_active = 1'
+    
     const { results } = await env.DB.prepare(`
       SELECT p.*, c.name as camp_name
       FROM pricing_items p
       LEFT JOIN camps c ON p.camp_id = c.id
-      WHERE p.is_active = 1
+      ${activeFilter}
       ORDER BY p.display_order ASC
     `).all()
     
@@ -540,21 +553,26 @@ async function handleUpdatePricing(itemId: string, request: Request, env: Env, c
     
     console.log('Updating pricing item:', itemId, 'with data:', JSON.stringify(data))
     
-    // Handle both camelCase (frontend) and snake_case
-    const name = data.name
-    const description = data.description || ''
-    const amount = typeof data.amount === 'number' ? data.amount : parseFloat(data.amount) || 0
-    const itemType = data.itemType || data.item_type || 'add_on'
-    const isRequired = data.isRequired ?? data.is_required ?? false
-    const isActive = data.isActive ?? data.is_active ?? true
-    const displayOrder = typeof data.displayOrder === 'number' ? data.displayOrder : (data.display_order ?? 0)
-    const campId = data.campId ?? data.camp_id ?? null
+    // Get existing item first
+    const existingItem = await env.DB.prepare(`
+      SELECT * FROM pricing_items WHERE id = ?
+    `).bind(parseInt(itemId)).first()
+    
+    if (!existingItem) {
+      return errorResponse('Pricing item not found', 404, cors)
+    }
+    
+    // Handle both camelCase (frontend) and snake_case, with fallback to existing values
+    const name = data.name ?? (existingItem as any).name
+    const description = data.description ?? (existingItem as any).description ?? ''
+    const amount = data.amount ?? (existingItem as any).amount ?? 0
+    const itemType = data.itemType ?? data.item_type ?? (existingItem as any).item_type ?? 'add_on'
+    const isRequired = data.isRequired ?? data.is_required ?? (existingItem as any).is_required ?? false
+    const isActive = data.isActive ?? data.is_active ?? (existingItem as any).is_active ?? true
+    const displayOrder = data.displayOrder ?? data.display_order ?? (existingItem as any).display_order ?? 0
+    const campId = data.campId ?? data.camp_id ?? (existingItem as any).camp_id ?? null
     
     console.log('Parsed values:', { name, description, amount, itemType, isRequired, isActive, displayOrder, campId })
-    
-    if (!name) {
-      return errorResponse('Name is required', 400, cors)
-    }
     
     await env.DB.prepare(`
       UPDATE pricing_items 
@@ -566,8 +584,8 @@ async function handleUpdatePricing(itemId: string, request: Request, env: Env, c
       description,
       amount,
       itemType,
-      isRequired ? 1 : 0,
-      isActive ? 1 : 0,
+      (isRequired === 1 || isRequired === true) ? 1 : 0,
+      (isActive === 1 || isActive === true) ? 1 : 0,
       displayOrder,
       campId,
       parseInt(itemId)
@@ -1063,7 +1081,7 @@ export default {
     try {
       // Camps endpoints
       if (path === '/api/camps' && method === 'GET') {
-        return handleGetCamps(env, cors)
+        return handleGetCamps(request, env, cors)
       }
       if (path.match(/^\/api\/camps\/\d+$/) && method === 'GET') {
         const campId = path.split('/')[3]
@@ -1083,7 +1101,7 @@ export default {
       
       // Pricing endpoints
       if (path === '/api/pricing' && method === 'GET') {
-        return handleGetPricing(env, cors)
+        return handleGetPricing(request, env, cors)
       }
       if (path === '/api/pricing' && method === 'POST') {
         return handleCreatePricing(request, env, cors)

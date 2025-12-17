@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Camp, PricingItem } from '../types'
 
 const STORAGE_KEY = 'opencamp_admin_token'
@@ -11,17 +12,45 @@ interface AuthState {
 
 type TabType = 'dashboard' | 'camps' | 'pricing' | 'registrations'
 
+const VALID_TABS: TabType[] = ['dashboard', 'camps', 'pricing', 'registrations']
+
 export default function AdminEnhanced() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  
   const [auth, setAuth] = useState<AuthState>({
     isAuthenticated: false,
     token: null,
     loading: true,
   })
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
-  const [selectedCampId, setSelectedCampId] = useState<number | null>(null)
+  
+  // Get active tab and selected camp from URL
+  const tabParam = searchParams.get('tab') as TabType | null
+  const activeTab: TabType = tabParam && VALID_TABS.includes(tabParam) ? tabParam : 'dashboard'
+  const selectedCampId = searchParams.get('campId') ? parseInt(searchParams.get('campId')!) : null
+  
+  // Helper to update URL params
+  const setActiveTab = (tab: TabType) => {
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('tab', tab)
+    if (tab !== 'registrations') {
+      newParams.delete('campId')
+    }
+    setSearchParams(newParams)
+  }
+  
+  const setSelectedCampId = (campId: number | null) => {
+    const newParams = new URLSearchParams(searchParams)
+    if (campId !== null) {
+      newParams.set('campId', campId.toString())
+      newParams.set('tab', 'registrations')
+    } else {
+      newParams.delete('campId')
+    }
+    setSearchParams(newParams)
+  }
 
   // Check for existing token
   useEffect(() => {
@@ -215,13 +244,14 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
   const [camps, setCamps] = useState<Camp[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingCamp, setEditingCamp] = useState<Camp | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     loadCamps()
-  }, [])
+  }, [showArchived])
 
   const loadCamps = async () => {
-    const res = await fetch('/api/camps')
+    const res = await fetch(`/api/camps?includeArchived=${showArchived}`)
     const data = await res.json()
     setCamps(data.camps || [])
   }
@@ -308,65 +338,98 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-heading text-xl font-bold text-white uppercase">Manage Camps</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="font-heading text-xl font-bold text-white uppercase">Manage Camps</h2>
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="w-4 h-4"
+            />
+            Show archived
+          </label>
+        </div>
         <button onClick={() => setShowForm(true)} className="btn-primary">
           + Create Camp
         </button>
       </div>
 
       <div className="space-y-4">
-        {camps.map((camp) => (
-          <div key={camp.id} className="card">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
-                <p className="text-gray-400 text-sm mt-1">{camp.description}</p>
-                <div className="flex gap-4 mt-2 text-sm">
-                  <span className="text-gray-500">
-                    📅 {camp.startDate} to {camp.endDate}
-                  </span>
-                  <span className="text-gray-500">
-                    👥 Ages {camp.ageMin}-{camp.ageMax}
-                  </span>
-                  <span className={camp.spotsTaken >= camp.maxSpots ? 'text-red-400' : 'text-green-400'}>
-                    {camp.maxSpots - camp.spotsTaken}/{camp.maxSpots} spots
-                  </span>
+        {camps.map((camp) => {
+          // Check if camp has ended
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const endDate = new Date(camp.endDate)
+          const hasEnded = endDate < today
+          
+          return (
+            <div key={camp.id} className={`card ${camp.status === 'archived' || hasEnded ? 'opacity-60' : ''}`}>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
+                    {camp.status === 'archived' && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Archived</span>
+                    )}
+                    {hasEnded && camp.status !== 'archived' && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-400">Ended</span>
+                    )}
+                  </div>
+                  <p className="text-gray-400 text-sm mt-1">{camp.description}</p>
+                  <div className="flex gap-4 mt-2 text-sm">
+                    <span className="text-gray-500">
+                      📅 {camp.startDate} to {camp.endDate}
+                    </span>
+                    <span className="text-gray-500">
+                      👥 Ages {camp.ageMin}-{camp.ageMax}
+                    </span>
+                    <span className={camp.spotsTaken >= camp.maxSpots ? 'text-red-400' : 'text-green-400'}>
+                      {camp.maxSpots - camp.spotsTaken}/{camp.maxSpots} spots
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/camp/${camp.id}`
+                      navigator.clipboard.writeText(url)
+                      alert('Registration link copied!\n\n' + url)
+                    }}
+                    className="btn-secondary text-sm py-1 px-3 text-green-400 hover:bg-green-900/20"
+                    title="Copy registration link"
+                  >
+                    📋 Copy Link
+                  </button>
+                  <button
+                    onClick={() => onViewRegistrations(camp.id)}
+                    className="btn-secondary text-sm py-1 px-3 text-blue-400 hover:bg-blue-900/20"
+                  >
+                    View Registrations
+                  </button>
+                  {hasEnded ? (
+                    <span className="text-xs text-gray-500 py-1 px-3" title="Cannot edit camps that have ended">
+                      Ended
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setEditingCamp(camp)}
+                      className="btn-secondary text-sm py-1 px-3"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(camp.id)}
+                    className="btn-secondary text-sm py-1 px-3 text-red-400 hover:bg-red-900/20"
+                  >
+                    Archive
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => {
-                    const url = `${window.location.origin}/camp/${camp.id}`
-                    navigator.clipboard.writeText(url)
-                    alert('Registration link copied!\n\n' + url)
-                  }}
-                  className="btn-secondary text-sm py-1 px-3 text-green-400 hover:bg-green-900/20"
-                  title="Copy registration link"
-                >
-                  📋 Copy Link
-                </button>
-                <button
-                  onClick={() => onViewRegistrations(camp.id)}
-                  className="btn-secondary text-sm py-1 px-3 text-blue-400 hover:bg-blue-900/20"
-                >
-                  View Registrations
-                </button>
-                <button
-                  onClick={() => setEditingCamp(camp)}
-                  className="btn-secondary text-sm py-1 px-3"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(camp.id)}
-                  className="btn-secondary text-sm py-1 px-3 text-red-400 hover:bg-red-900/20"
-                >
-                  Archive
-                </button>
-              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -824,22 +887,38 @@ function PricingTab({ token }: { token: string }) {
   const [camps, setCamps] = useState<Camp[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingItem, setEditingItem] = useState<PricingItem | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     loadItems()
     loadCamps()
-  }, [])
+  }, [showArchived])
 
   const loadItems = async () => {
-    const res = await fetch('/api/pricing')
+    const res = await fetch(`/api/pricing?includeArchived=${showArchived}`)
     const data = await res.json()
     setItems(data.items || [])
   }
 
   const loadCamps = async () => {
-    const res = await fetch('/api/camps')
+    const res = await fetch('/api/camps?includeArchived=true')
     const data = await res.json()
     setCamps(data.camps || [])
+  }
+
+  const handleArchive = async (id: number, currentlyActive: boolean) => {
+    if (!confirm(`${currentlyActive ? 'Archive' : 'Restore'} this pricing item?`)) return
+    
+    await fetch(`/api/pricing/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ isActive: !currentlyActive }),
+    })
+    
+    loadItems()
   }
 
   const handleSubmit = async (itemData: Partial<PricingItem>) => {
@@ -871,17 +950,6 @@ function PricingTab({ token }: { token: string }) {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this pricing item?')) return
-    
-    await fetch(`/api/pricing/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-    
-    loadItems()
-  }
-
   if (showForm || editingItem) {
     return (
       <PricingForm
@@ -899,57 +967,83 @@ function PricingTab({ token }: { token: string }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-heading text-xl font-bold text-white uppercase">Pricing Items</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="font-heading text-xl font-bold text-white uppercase">Pricing Items</h2>
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="w-4 h-4"
+            />
+            Show archived
+          </label>
+        </div>
         <button onClick={() => setShowForm(true)} className="btn-primary">
           + Create Pricing Item
         </button>
       </div>
 
       <div className="space-y-2">
-        {items.map((item) => (
-          <div key={item.id} className="card">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <div className="font-medium text-white">{item.name}</div>
-                  {!item.isActive && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Inactive</span>
-                  )}
-                  {item.isRequired && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400">Required</span>
-                  )}
-                </div>
-                <div className="text-sm text-gray-400 mt-1">{item.description}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Type: {item.itemType} • Order: {item.displayOrder}
-                  {item.campId && ` • Camp: ${camps.find(c => c.id === item.campId)?.name || 'Unknown'}`}
-                  {!item.campId && ' • All Camps'}
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="text-right">
-                  <div className={`text-lg font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
-                    {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
+        {items.map((item) => {
+          // Check if item is assigned to an active camp
+          const assignedCamp = item.campId ? camps.find(c => c.id === item.campId) : null
+          const isInUse = assignedCamp && assignedCamp.status === 'active'
+          
+          return (
+            <div key={item.id} className={`card ${!item.isActive ? 'opacity-60' : ''}`}>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium text-white">{item.name}</div>
+                    {!item.isActive && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Archived</span>
+                    )}
+                    {item.isRequired && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400">Required</span>
+                    )}
+                    {isInUse && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">In Use</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-400 mt-1">{item.description}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Type: {item.itemType} • Order: {item.displayOrder}
+                    {item.campId && ` • Camp: ${assignedCamp?.name || 'Unknown'}`}
+                    {!item.campId && ' • Not assigned'}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditingItem(item)}
-                    className="btn-secondary text-sm py-1 px-3"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="btn-secondary text-sm py-1 px-3 text-red-400 hover:bg-red-900/20"
-                  >
-                    Delete
-                  </button>
+                <div className="flex items-start gap-4">
+                  <div className="text-right">
+                    <div className={`text-lg font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
+                      {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingItem(item)}
+                      className="btn-secondary text-sm py-1 px-3"
+                    >
+                      Edit
+                    </button>
+                    {isInUse ? (
+                      <span className="text-xs text-gray-500 py-1 px-3" title="Cannot archive while assigned to active camp">
+                        In use
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleArchive(item.id, item.isActive)}
+                        className={`btn-secondary text-sm py-1 px-3 ${item.isActive ? 'text-red-400 hover:bg-red-900/20' : 'text-green-400 hover:bg-green-900/20'}`}
+                      >
+                        {item.isActive ? 'Archive' : 'Restore'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
