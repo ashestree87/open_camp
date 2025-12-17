@@ -1,0 +1,8 @@
+# Copy this file to .dev.vars for local development
+# DO NOT commit .dev.vars to version control
+
+ADMIN_PASSWORD=your-secure-admin-password
+
+# Resend API key for email notifications (optional)
+# Get your key at https://resend.com
+RESEND_API_KEY=re_xxxxxxxxxx

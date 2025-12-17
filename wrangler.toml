@@ -1,0 +1,41 @@
+# Open Camp - Kids Camp Registration
+# Cloudflare Worker Configuration
+
+name = "open-camp"
+main = "src/worker.ts"
+compatibility_date = "2024-01-01"
+
+# For Pages deployment (comment out 'main' above and use this instead)
+# pages_build_output_dir = "dist"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "open-camp-db"
+database_id = "YOUR_DATABASE_ID_HERE"  # Replace after running: wrangler d1 create open-camp-db
+
+# KV Namespace binding
+[[kv_namespaces]]
+binding = "KV"
+id = "YOUR_KV_NAMESPACE_ID_HERE"  # Replace after running: wrangler kv:namespace create KV
+
+# Preview KV Namespace (for local development)
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "YOUR_PREVIEW_KV_ID_HERE"
+# preview_id = "YOUR_PREVIEW_KV_ID_HERE"
+
+# Environment variables
+[vars]
+ALLOWED_ORIGIN = "https://your-domain.pages.dev"  # Update with your Pages domain
+
+# Secrets (set via wrangler secret put):
+# - RESEND_API_KEY: Your Resend API key for email notifications
+
+# Production environment
+[env.production]
+vars = { ALLOWED_ORIGIN = "https://open-camp.pages.dev" }
+
+# Development environment
+[env.development]
+vars = { ALLOWED_ORIGIN = "*" }
