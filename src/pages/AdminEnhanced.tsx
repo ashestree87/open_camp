@@ -1429,6 +1429,10 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
           setSelectedRegistration(updated)
           setAllRegistrations(prev => prev.map(r => r.id === updated.id ? updated : r))
         }}
+        onDelete={() => {
+          setAllRegistrations(prev => prev.filter(r => r.id !== selectedRegistration.id))
+          setSelectedRegistration(null)
+        }}
       />
     )
   }
@@ -1557,18 +1561,21 @@ function RegistrationDetail({
   camps, 
   token, 
   onBack, 
-  onUpdate 
+  onUpdate,
+  onDelete 
 }: { 
   registration: any
   camps: Camp[]
   token: string
   onBack: () => void
   onUpdate: (updated: any) => void
+  onDelete: () => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState(registration)
-  const { showToast } = useToast()
+  const [deleting, setDeleting] = useState(false)
+  const { showToast, showConfirm } = useToast()
 
   const getCampName = (campId: number) => camps.find(c => c.id === campId)?.name || 'Unknown'
 
@@ -1624,6 +1631,37 @@ function RegistrationDetail({
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleDelete = () => {
+    showConfirm(
+      `Are you sure you want to delete this registration for ${registration.child_full_name}? Personal data will be removed but a record will be kept for historical accuracy.`,
+      async () => {
+        setDeleting(true)
+        try {
+          const response = await fetch(`/api/registrations/${registration.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ reason: 'Deleted by admin' }),
+          })
+          
+          if (!response.ok) {
+            const data = await response.json()
+            throw new Error(data.error || 'Failed to delete')
+          }
+          
+          showToast('Registration deleted successfully', 'success')
+          onDelete()
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'Failed to delete', 'error')
+        } finally {
+          setDeleting(false)
+        }
+      }
+    )
   }
 
   const updateField = (field: string, value: any) => {
@@ -1749,9 +1787,18 @@ function RegistrationDetail({
               </button>
             </>
           ) : (
-            <button onClick={() => setIsEditing(true)} className="btn-primary text-sm">
-              ✏️ Edit Registration
-            </button>
+            <>
+              <button onClick={() => setIsEditing(true)} className="btn-primary text-sm">
+                ✏️ Edit Registration
+              </button>
+              <button 
+                onClick={handleDelete} 
+                disabled={deleting}
+                className="btn-secondary text-sm text-red-400 hover:bg-red-900/20"
+              >
+                {deleting ? 'Deleting...' : '🗑️ Delete'}
+              </button>
+            </>
           )}
         </div>
       </div>

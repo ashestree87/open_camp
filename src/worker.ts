@@ -1038,12 +1038,18 @@ async function handleGetRegistrations(request: Request, env: Env, cors: HeadersI
     const isAuthed = await verifyAuth(request, env)
     if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
     
+    const url = new URL(request.url)
+    const includeDeleted = url.searchParams.get('includeDeleted') === 'true'
+    
+    const whereClause = includeDeleted ? '' : 'WHERE r.deleted_at IS NULL'
+    
     const { results } = await env.DB.prepare(`
       SELECT 
         r.*,
         c.name as camp_name
       FROM registrations r
       LEFT JOIN camps c ON r.camp_id = c.id
+      ${whereClause}
       ORDER BY r.created_at DESC
     `).all()
     
@@ -1055,6 +1061,63 @@ async function handleGetRegistrations(request: Request, env: Env, cors: HeadersI
   } catch (error) {
     console.error('Get registrations error:', error)
     return errorResponse('Failed to fetch registrations', 500, cors)
+  }
+}
+
+async function handleDeleteRegistration(regId: string, request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  try {
+    const isAuthed = await verifyAuth(request, env)
+    if (!isAuthed) return errorResponse('Unauthorized', 401, cors)
+    
+    const data: any = await request.json().catch(() => ({}))
+    const reason = data.reason || 'Deleted by admin'
+    
+    // Get the registration first to check status and update spots
+    const registration = await env.DB.prepare(`
+      SELECT id, camp_id, registration_status, deleted_at FROM registrations WHERE id = ?
+    `).bind(regId).first()
+    
+    if (!registration) {
+      return errorResponse('Registration not found', 404, cors)
+    }
+    
+    if (registration.deleted_at) {
+      return errorResponse('Registration already deleted', 400, cors)
+    }
+    
+    // Soft delete - keep stub of info for historical accuracy
+    await env.DB.prepare(`
+      UPDATE registrations 
+      SET deleted_at = datetime('now'),
+          deleted_reason = ?,
+          -- Clear sensitive personal data but keep camp and dates for stats
+          email = '[deleted]',
+          phone = '[deleted]',
+          address = '[deleted]',
+          emergency1_name = '[deleted]',
+          emergency1_phone = '[deleted]',
+          emergency2_name = '[deleted]',
+          emergency2_phone = '[deleted]',
+          authorised_collectors = '[deleted]',
+          medical_conditions_details = '[deleted]',
+          additional_needs_details = '[deleted]',
+          allergies_details = '[deleted]',
+          medication_details = '[deleted]',
+          further_info_details = '[deleted]'
+      WHERE id = ?
+    `).bind(reason, regId).run()
+    
+    // If was confirmed (not waitlist), release the spot back
+    if (registration.registration_status !== 'waitlist') {
+      await env.DB.prepare(`
+        UPDATE camps SET spots_taken = MAX(spots_taken - 1, 0) WHERE id = ?
+      `).bind(registration.camp_id).run()
+    }
+    
+    return jsonResponse({ success: true, message: 'Registration deleted' }, 200, cors)
+  } catch (error) {
+    console.error('Delete registration error:', error)
+    return errorResponse('Failed to delete registration', 500, cors)
   }
 }
 
@@ -1253,6 +1316,10 @@ export default {
       if (path.match(/^\/api\/registrations\/\d+$/) && method === 'PUT') {
         const regId = path.split('/')[3]
         return handleUpdateRegistration(regId, request, env, cors)
+      }
+      if (path.match(/^\/api\/registrations\/\d+$/) && method === 'DELETE') {
+        const regId = path.split('/')[3]
+        return handleDeleteRegistration(regId, request, env, cors)
       }
       
       // Admin config endpoints  
