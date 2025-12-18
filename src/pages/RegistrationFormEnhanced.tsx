@@ -73,10 +73,13 @@ const defaultChild: ChildFormData = {
   furtherInfoDetails: '',
 }
 
+type UnavailableReason = 'not_found' | 'archived' | 'past' | 'paused' | 'closed' | 'full'
+
 export default function RegistrationFormEnhanced() {
   const { campId } = useParams<{ campId: string }>()
   const [camps, setCamps] = useState<Camp[]>([])
   const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null)
+  const [unavailableCamp, setUnavailableCamp] = useState<{ camp: Camp | null; reason: UnavailableReason } | null>(null)
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([])
   const [selectedItems, setSelectedItems] = useState<{ [key: number]: boolean }>({})
   const [loading, setLoading] = useState(true)
@@ -154,12 +157,32 @@ export default function RegistrationFormEnhanced() {
 
   // Load camps and pricing
   useEffect(() => {
-    Promise.all([
+    const fetchUrls = [
       fetch('/api/camps').then(r => r.json()),
       fetch('/api/pricing').then(r => r.json()),
-    ])
-      .then(([campsData, pricingData]) => {
-        const activeCamps = campsData.camps?.filter((c: Camp) => c.status === 'active') || []
+    ]
+    // If accessing a specific camp, also fetch all camps to determine unavailable reason
+    if (campId) {
+      fetchUrls.push(fetch('/api/camps?includeArchived=true').then(r => r.json()))
+    }
+    
+    Promise.all(fetchUrls)
+      .then(([campsData, pricingData, allCampsData]) => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        // Filter to show only:
+        // - Active camps (not archived/full)
+        // - Camps that haven't ended yet
+        // - Camps where registration is open
+        const activeCamps = campsData.camps?.filter((c: Camp) => {
+          const endDate = new Date(c.endDate)
+          endDate.setHours(23, 59, 59, 999) // End of the last day
+          
+          return c.status === 'active' && 
+                 endDate >= today && 
+                 c.registrationStatus === 'open'
+        }) || []
         setCamps(activeCamps)
         const allPricingItems = pricingData.items || []
         setPricingItems(allPricingItems)
@@ -167,6 +190,7 @@ export default function RegistrationFormEnhanced() {
         if (campId) {
           const camp = activeCamps.find((c: Camp) => c.id === parseInt(campId))
           if (camp) {
+            // Camp is available for registration
             setSelectedCamp(camp)
             // Auto-select required items for this camp
             const requiredItems: { [key: number]: boolean } = {}
@@ -174,6 +198,32 @@ export default function RegistrationFormEnhanced() {
               .filter((item: PricingItem) => item.campId === camp.id && item.isRequired)
               .forEach((item: PricingItem) => { requiredItems[item.id] = true })
             setSelectedItems(requiredItems)
+          } else {
+            // Camp not in active list - determine why
+            const allCamps = allCampsData?.camps || []
+            const requestedCamp = allCamps.find((c: Camp) => c.id === parseInt(campId))
+            
+            if (!requestedCamp) {
+              setUnavailableCamp({ camp: null, reason: 'not_found' })
+            } else {
+              const endDate = new Date(requestedCamp.endDate)
+              endDate.setHours(23, 59, 59, 999)
+              const spotsLeft = requestedCamp.maxSpots - requestedCamp.spotsTaken
+              
+              if (requestedCamp.status === 'archived') {
+                setUnavailableCamp({ camp: requestedCamp, reason: 'archived' })
+              } else if (endDate < today) {
+                setUnavailableCamp({ camp: requestedCamp, reason: 'past' })
+              } else if (requestedCamp.registrationStatus === 'paused') {
+                setUnavailableCamp({ camp: requestedCamp, reason: 'paused' })
+              } else if (requestedCamp.registrationStatus === 'closed') {
+                setUnavailableCamp({ camp: requestedCamp, reason: 'closed' })
+              } else if (spotsLeft <= 0 && !requestedCamp.waitlistEnabled) {
+                setUnavailableCamp({ camp: requestedCamp, reason: 'full' })
+              } else {
+                setUnavailableCamp({ camp: requestedCamp, reason: 'not_found' })
+              }
+            }
           }
         }
         
@@ -385,6 +435,69 @@ export default function RegistrationFormEnhanced() {
     )
   }
 
+  // If a campId was provided but camp is unavailable - show specific messaging
+  if (campId && !selectedCamp && unavailableCamp) {
+    const { camp, reason } = unavailableCamp
+    
+    const messages: Record<UnavailableReason, { icon: string; title: string; message: string }> = {
+      not_found: {
+        icon: '❓',
+        title: 'Camp Not Found',
+        message: 'The camp you\'re looking for doesn\'t exist or has been removed.',
+      },
+      archived: {
+        icon: '📦',
+        title: 'Camp Archived',
+        message: 'This camp has been archived and is no longer available for registration.',
+      },
+      past: {
+        icon: '📅',
+        title: 'Camp Has Ended',
+        message: 'This camp has already finished. Check out our upcoming camps!',
+      },
+      paused: {
+        icon: '⏸️',
+        title: 'Registration Paused',
+        message: camp?.waitlistMessage || 'Registration for this camp is temporarily paused. Please check back later.',
+      },
+      closed: {
+        icon: '🔒',
+        title: 'Registration Closed',
+        message: 'Registration for this camp is now closed.',
+      },
+      full: {
+        icon: '🎟️',
+        title: 'Camp Fully Booked',
+        message: 'This camp is fully booked and no longer accepting registrations.',
+      },
+    }
+    
+    const { icon, title, message } = messages[reason]
+    
+    return (
+      <div className="card max-w-2xl mx-auto text-center">
+        <div className="text-6xl mb-4">{icon}</div>
+        <h2 className="font-heading text-2xl font-bold text-white uppercase mb-4">
+          {title}
+        </h2>
+        {camp && (
+          <div className="mb-4 p-4 bg-gray-800/50 rounded border border-gray-700">
+            <h3 className="font-heading text-lg text-brand-primary mb-1">{camp.name}</h3>
+            <p className="text-gray-500 text-sm">
+              📅 {camp.startDate} - {camp.endDate}
+            </p>
+          </div>
+        )}
+        <p className="text-gray-400 mb-6">
+          {message}
+        </p>
+        <Link to="/" className="btn-primary inline-block">
+          View Available Camps
+        </Link>
+      </div>
+    )
+  }
+
   if (camps.length === 0) {
     return (
       <div className="card max-w-2xl mx-auto text-center">
@@ -416,35 +529,22 @@ export default function RegistrationFormEnhanced() {
               const spotsLeft = camp.maxSpots - camp.spotsTaken
               const isFull = spotsLeft <= 0
 
+              // Hide full camps unless waitlist is enabled
+              if (isFull && !camp.waitlistEnabled) return null
+
               return (
                 <Link
                   key={camp.id}
                   to={`/camp/${camp.id}`}
-                  className={`block w-full text-left p-4 rounded border-2 transition-all ${
-                    isFull
-                      ? 'border-gray-700 bg-gray-800/50 opacity-50 cursor-not-allowed pointer-events-none'
-                      : 'border-gray-700 hover:border-brand-primary/50'
-                  }`}
+                  className="block w-full text-left p-4 rounded border-2 transition-all border-gray-700 hover:border-brand-primary/50"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
                     <div className="flex flex-col items-end gap-1">
-                      {camp.registrationStatus === 'paused' && (
-                        <span className="text-yellow-400 text-sm font-bold">⏸️ PAUSED</span>
-                      )}
-                      {camp.registrationStatus === 'closed' && (
-                        <span className="text-red-400 text-sm font-bold">🔒 CLOSED</span>
-                      )}
-                      {camp.registrationStatus !== 'closed' && camp.registrationStatus !== 'paused' && (
-                        isFull ? (
-                          camp.waitlistEnabled ? (
-                            <span className="text-yellow-400 text-sm font-bold">📋 WAITLIST</span>
-                          ) : (
-                            <span className="text-red-400 text-sm font-bold">SOLD OUT</span>
-                          )
-                        ) : (
-                          <span className="text-green-400 text-sm">{spotsLeft} spots left</span>
-                        )
+                      {isFull && camp.waitlistEnabled ? (
+                        <span className="text-yellow-400 text-sm font-bold">📋 WAITLIST</span>
+                      ) : (
+                        <span className="text-green-400 text-sm">{spotsLeft} spots left</span>
                       )}
                     </div>
                   </div>

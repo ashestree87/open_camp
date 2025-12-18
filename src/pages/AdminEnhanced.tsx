@@ -244,22 +244,89 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
   const [camps, setCamps] = useState<Camp[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingCamp, setEditingCamp] = useState<Camp | null>(null)
-  const [showArchived, setShowArchived] = useState(false)
+  const [duplicatingCamp, setDuplicatingCamp] = useState<Camp | null>(null)
   const { showToast, showConfirm } = useToast()
+  
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
+  const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'ongoing' | 'past'>('all')
+  const [registrationFilter, setRegistrationFilter] = useState<'all' | 'open' | 'paused' | 'closed'>('all')
+  const [capacityFilter, setCapacityFilter] = useState<'all' | 'available' | 'full'>('all')
+  const [showFilters, setShowFilters] = useState(false)
+
+  const handleDuplicate = (camp: Camp) => {
+    // Create a copy with modified name and cleared dates
+    const duplicate = {
+      ...camp,
+      id: undefined as any, // Clear ID so it creates a new camp
+      name: `${camp.name} (Copy)`,
+      startDate: '',
+      endDate: '',
+      spotsTaken: 0,
+      status: 'active' as const,
+      registrationStatus: 'open' as const,
+    }
+    setDuplicatingCamp(duplicate as Camp)
+  }
 
   useEffect(() => {
     loadCamps()
-  }, [showArchived])
+  }, [])
 
   const loadCamps = async () => {
-    const res = await fetch(`/api/camps?includeArchived=${showArchived}`)
+    const res = await fetch('/api/camps?includeArchived=true')
     const data = await res.json()
     setCamps(data.camps || [])
   }
 
+  // Filter camps based on all criteria
+  const filteredCamps = camps.filter(camp => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const startDate = new Date(camp.startDate)
+    const endDate = new Date(camp.endDate)
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesSearch = 
+        camp.name.toLowerCase().includes(query) ||
+        camp.description.toLowerCase().includes(query)
+      if (!matchesSearch) return false
+    }
+    
+    // Archived filter
+    if (!showArchived && camp.status === 'archived') return false
+    
+    // Date filter
+    if (dateFilter !== 'all') {
+      if (dateFilter === 'upcoming' && startDate <= today) return false
+      if (dateFilter === 'ongoing' && (startDate > today || endDate < today)) return false
+      if (dateFilter === 'past' && endDate >= today) return false
+    }
+    
+    // Registration status filter
+    if (registrationFilter !== 'all') {
+      const regStatus = camp.registrationStatus || 'open'
+      if (registrationFilter !== regStatus) return false
+    }
+    
+    // Capacity filter
+    if (capacityFilter !== 'all') {
+      const isFull = camp.spotsTaken >= camp.maxSpots
+      if (capacityFilter === 'available' && isFull) return false
+      if (capacityFilter === 'full' && !isFull) return false
+    }
+    
+    return true
+  })
+
   const handleSubmit = async (campData: Partial<Camp>, pricingItems: PricingItem[], deselectedItems: PricingItem[] = []) => {
-    const url = editingCamp ? `/api/camps/${editingCamp.id}` : '/api/camps'
-    const method = editingCamp ? 'PUT' : 'POST'
+    // When duplicating, always create new (POST)
+    const isEditing = editingCamp && !duplicatingCamp
+    const url = isEditing ? `/api/camps/${editingCamp.id}` : '/api/camps'
+    const method = isEditing ? 'PUT' : 'POST'
     
     try {
       // First save the camp
@@ -281,7 +348,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
         return
       }
       
-      const campId = editingCamp?.id || data.id
+      const campId = (isEditing && editingCamp?.id) || data.id
       
       // Save/update pricing items that are selected for this camp
       for (const item of pricingItems) {
@@ -319,7 +386,8 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
       loadCamps()
       setShowForm(false)
       setEditingCamp(null)
-      showToast('Camp saved successfully!', 'success')
+      setDuplicatingCamp(null)
+      showToast(duplicatingCamp ? 'Camp duplicated successfully!' : 'Camp saved successfully!', 'success')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Network error', 'error')
       console.error('Network error:', error)
@@ -353,43 +421,162 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
     )
   }
 
-  if (showForm || editingCamp) {
+  if (showForm || editingCamp || duplicatingCamp) {
     return (
       <CampForm
-        camp={editingCamp}
+        camp={editingCamp || duplicatingCamp}
         token={token}
         onSubmit={handleSubmit}
         onCancel={() => {
           setShowForm(false)
           setEditingCamp(null)
+          setDuplicatingCamp(null)
         }}
+        isDuplicate={!!duplicatingCamp}
       />
     )
   }
 
+  const activeFilterCount = [
+    searchQuery ? 1 : 0,
+    showArchived ? 1 : 0,
+    dateFilter !== 'all' ? 1 : 0,
+    registrationFilter !== 'all' ? 1 : 0,
+    capacityFilter !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0)
+
+  const clearAllFilters = () => {
+    setSearchQuery('')
+    setShowArchived(false)
+    setDateFilter('all')
+    setRegistrationFilter('all')
+    setCapacityFilter('all')
+  }
+
   return (
     <div>
+      {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h2 className="font-heading text-xl font-bold text-white uppercase">Manage Camps</h2>
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
-              className="w-4 h-4"
-            />
-            Show archived
-          </label>
-        </div>
+        <h2 className="font-heading text-xl font-bold text-white uppercase">
+          Manage Camps
+        </h2>
         <button onClick={() => setShowForm(true)} className="btn-primary">
           + Create Camp
         </button>
       </div>
 
+      {/* Search and Filters */}
+      <div className="mb-6 space-y-3">
+        <div className="flex gap-3">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              placeholder="Search camps by name or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="input-field w-full pl-10"
+            />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`btn-secondary flex items-center gap-2 ${showFilters ? 'bg-brand-primary/20 border-brand-primary' : ''}`}
+          >
+            <span>⚙️ Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="bg-brand-primary text-white text-xs px-2 py-0.5 rounded-full">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {showFilters && (
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="label text-xs">Date Range</label>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value as any)}
+                  className="input-field text-sm w-full"
+                >
+                  <option value="all">All Dates</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="ongoing">Currently Running</option>
+                  <option value="past">Past</option>
+                </select>
+              </div>
+              <div>
+                <label className="label text-xs">Registration Status</label>
+                <select
+                  value={registrationFilter}
+                  onChange={(e) => setRegistrationFilter(e.target.value as any)}
+                  className="input-field text-sm w-full"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="open">🟢 Open</option>
+                  <option value="paused">⏸️ Paused</option>
+                  <option value="closed">🔒 Closed</option>
+                </select>
+              </div>
+              <div>
+                <label className="label text-xs">Capacity</label>
+                <select
+                  value={capacityFilter}
+                  onChange={(e) => setCapacityFilter(e.target.value as any)}
+                  className="input-field text-sm w-full"
+                >
+                  <option value="all">Any Capacity</option>
+                  <option value="available">Has Spots Available</option>
+                  <option value="full">Full / Sold Out</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer pb-2">
+                  <input
+                    type="checkbox"
+                    checked={showArchived}
+                    onChange={(e) => setShowArchived(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  Include archived
+                </label>
+              </div>
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="flex justify-between items-center pt-2 border-t border-gray-700">
+                <span className="text-sm text-gray-400">
+                  Showing {filteredCamps.length} of {camps.length} camps
+                </span>
+                <button onClick={clearAllFilters} className="text-sm text-brand-primary hover:underline">
+                  Clear all filters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!showFilters && (
+          <div className="flex gap-4 text-sm text-gray-500">
+            <span>{filteredCamps.length} camp{filteredCamps.length !== 1 ? 's' : ''}</span>
+            {activeFilterCount > 0 && (
+              <button onClick={clearAllFilters} className="text-brand-primary hover:underline">
+                Clear {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Camp List */}
       <div className="space-y-4">
-        {camps.map((camp) => {
-          // Check if camp has ended
+        {filteredCamps.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <p className="text-lg mb-2">No camps found</p>
+            <p className="text-sm">Try adjusting your filters or create a new camp</p>
+          </div>
+        ) : filteredCamps.map((camp) => {
           const today = new Date()
           today.setHours(0, 0, 0, 0)
           const endDate = new Date(camp.endDate)
@@ -435,42 +622,57 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
                     </span>
                   </div>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => {
-                      const url = `${window.location.origin}/camp/${camp.id}`
-                      navigator.clipboard.writeText(url)
-                      showToast('Registration link copied to clipboard!', 'success')
-                    }}
-                    className="btn-secondary text-sm py-1 px-3 text-green-400 hover:bg-green-900/20"
-                    title="Copy registration link"
-                  >
-                    📋 Copy Link
-                  </button>
-                  <button
-                    onClick={() => onViewRegistrations(camp.id)}
-                    className="btn-secondary text-sm py-1 px-3 text-blue-400 hover:bg-blue-900/20"
-                  >
-                    View Registrations
-                  </button>
-                  {hasEnded && camp.status !== 'archived' ? (
-                    <span className="text-xs text-gray-500 py-1 px-3" title="Cannot edit camps that have ended">
-                      Ended
-                    </span>
-                  ) : (
+                <div className="flex flex-col items-end gap-2">
+                  {/* Primary Actions */}
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => setEditingCamp(camp)}
-                      className="btn-secondary text-sm py-1 px-3"
+                      onClick={() => onViewRegistrations(camp.id)}
+                      className="btn-primary text-sm py-1.5 px-4"
                     >
-                      Edit
+                      View Registrations
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleArchiveCamp(camp.id, camp.status)}
-                    className={`btn-secondary text-sm py-1 px-3 ${camp.status === 'archived' ? 'text-green-400 hover:bg-green-900/20' : 'text-red-400 hover:bg-red-900/20'}`}
-                  >
-                    {camp.status === 'archived' ? 'Restore' : 'Archive'}
-                  </button>
+                    {!hasEnded && camp.status !== 'archived' && (
+                      <button
+                        onClick={() => setEditingCamp(camp)}
+                        className="btn-secondary text-sm py-1.5 px-4"
+                      >
+                        ✏️ Edit
+                      </button>
+                    )}
+                  </div>
+                  {/* Secondary Actions */}
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/camp/${camp.id}`
+                        navigator.clipboard.writeText(url)
+                        showToast('Registration link copied to clipboard!', 'success')
+                      }}
+                      className="text-xs py-1 px-2 text-gray-400 hover:text-green-400 hover:bg-green-900/20 rounded transition-colors"
+                      title="Copy registration link"
+                    >
+                      🔗 Copy Link
+                    </button>
+                    <span className="text-gray-600">|</span>
+                    <button
+                      onClick={() => handleDuplicate(camp)}
+                      className="text-xs py-1 px-2 text-gray-400 hover:text-purple-400 hover:bg-purple-900/20 rounded transition-colors"
+                      title="Create a copy of this camp"
+                    >
+                      📋 Duplicate
+                    </button>
+                    <span className="text-gray-600">|</span>
+                    <button
+                      onClick={() => handleArchiveCamp(camp.id, camp.status)}
+                      className={`text-xs py-1 px-2 rounded transition-colors ${
+                        camp.status === 'archived' 
+                          ? 'text-gray-400 hover:text-green-400 hover:bg-green-900/20' 
+                          : 'text-gray-400 hover:text-red-400 hover:bg-red-900/20'
+                      }`}
+                    >
+                      {camp.status === 'archived' ? '↩️ Restore' : '🗑️ Archive'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -485,12 +687,14 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
 function CampForm({ 
   camp, 
   onSubmit, 
-  onCancel 
+  onCancel,
+  isDuplicate = false
 }: { 
   camp: Camp | null
   token: string
   onSubmit: (data: Partial<Camp>, pricingItems: PricingItem[], deselectedItems: PricingItem[]) => void
   onCancel: () => void
+  isDuplicate?: boolean
 }) {
   const [formData, setFormData] = useState({
     name: camp?.name || '',
@@ -598,394 +802,385 @@ function CampForm({
   }
 
   return (
-    <div className="card max-w-3xl">
+    <div className="card max-w-5xl">
       <h2 className="font-heading text-xl font-bold text-white uppercase mb-4">
-        {camp ? 'Edit Camp' : 'Create New Camp'}
+        {isDuplicate ? '📋 Duplicate Camp' : camp ? 'Edit Camp' : 'Create New Camp'}
       </h2>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Info Section */}
-        <div className="space-y-4">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
-            Camp Details
-          </h3>
-          <div>
-            <label className="label">Camp Name *</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="input-field"
-              required
-            />
-          </div>
-          <div>
-            <label className="label">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="input-field resize-none"
-              rows={3}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Start Date *</label>
-              <input
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                className="input-field"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">End Date *</label>
-              <input
-                type="date"
-                value={formData.endDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                className="input-field"
-                required
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="label">Min Age</label>
-              <input
-                type="number"
-                value={formData.ageMin}
-                onChange={(e) => setFormData({ ...formData, ageMin: parseInt(e.target.value) })}
-                className="input-field"
-                min="3"
-                max="18"
-              />
-            </div>
-            <div>
-              <label className="label">Max Age</label>
-              <input
-                type="number"
-                value={formData.ageMax}
-                onChange={(e) => setFormData({ ...formData, ageMax: parseInt(e.target.value) })}
-                className="input-field"
-                min="3"
-                max="18"
-              />
-            </div>
-            <div>
-              <label className="label">Max Spots</label>
-              <input
-                type="number"
-                value={formData.maxSpots}
-                onChange={(e) => setFormData({ ...formData, maxSpots: parseInt(e.target.value) })}
-                className="input-field"
-                min="1"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="label">Status</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-              className="input-field"
-            >
-              <option value="active">Active</option>
-              <option value="full">Full</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Registration Controls Section */}
-        <div className="space-y-4">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
-            Registration Controls
-          </h3>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Registration Status</label>
-              <select
-                value={formData.registrationStatus}
-                onChange={(e) => setFormData({ ...formData, registrationStatus: e.target.value as 'open' | 'paused' | 'closed' })}
-                className="input-field"
-              >
-                <option value="open">🟢 Open - Accepting registrations</option>
-                <option value="paused">🟡 Paused - Temporarily stopped</option>
-                <option value="closed">🔴 Closed - No registrations</option>
-              </select>
-              <p className="text-gray-500 text-xs mt-1">
-                {formData.registrationStatus === 'open' && 'Users can register for this camp'}
-                {formData.registrationStatus === 'paused' && 'Registration form shows a "paused" message'}
-                {formData.registrationStatus === 'closed' && 'Registration form is hidden'}
-              </p>
-            </div>
-            
-            <div>
-              <label className="flex items-center gap-3 cursor-pointer mt-6">
-                <input
-                  type="checkbox"
-                  checked={formData.waitlistEnabled}
-                  onChange={(e) => setFormData({ ...formData, waitlistEnabled: e.target.checked })}
-                  className="w-5 h-5 rounded"
-                />
-                <span className="text-gray-300">Enable Waitlist</span>
-              </label>
-              <p className="text-gray-500 text-xs mt-1">
-                When camp is full, users can join a waitlist
-              </p>
-            </div>
-          </div>
-          
-          {formData.waitlistEnabled && (
-            <div>
-              <label className="label">Waitlist Message (optional)</label>
-              <input
-                type="text"
-                value={formData.waitlistMessage}
-                onChange={(e) => setFormData({ ...formData, waitlistMessage: e.target.value })}
-                className="input-field"
-                placeholder="e.g., We'll contact you if a spot opens up"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Sibling Discount Section */}
-        <div className="space-y-4">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
-            Sibling Discount
-          </h3>
-          <p className="text-gray-400 text-sm">
-            Automatically apply a discount when registering multiple children from the same family.
-          </p>
-          
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.siblingDiscountEnabled}
-              onChange={(e) => setFormData({ ...formData, siblingDiscountEnabled: e.target.checked })}
-              className="w-5 h-5 rounded"
-            />
-            <span className="text-white">Enable sibling discount</span>
-          </label>
-          
-          {formData.siblingDiscountEnabled && (
-            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-800/50 rounded border border-gray-700">
+      <form onSubmit={handleSubmit}>
+        {/* Two-column layout on desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column - Basic Info & Registration Controls */}
+          <div className="space-y-6">
+            {/* Basic Info Section */}
+            <div className="space-y-4">
+              <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+                Camp Details
+              </h3>
               <div>
-                <label className="label">Discount Type</label>
-                <select
-                  value={formData.siblingDiscountType}
-                  onChange={(e) => setFormData({ ...formData, siblingDiscountType: e.target.value as 'fixed' | 'percentage' })}
-                  className="input-field"
-                >
-                  <option value="fixed">Fixed Amount (AED)</option>
-                  <option value="percentage">Percentage (%)</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">
-                  {formData.siblingDiscountType === 'percentage' ? 'Discount %' : 'Discount Amount (AED)'}
-                </label>
-                <input
-                  type="number"
-                  value={formData.siblingDiscountAmount}
-                  onChange={(e) => setFormData({ ...formData, siblingDiscountAmount: parseFloat(e.target.value) || 0 })}
-                  className="input-field"
-                  min="0"
-                  step={formData.siblingDiscountType === 'percentage' ? '1' : '0.01'}
-                />
-              </div>
-              <div className="col-span-2 text-sm text-gray-400 bg-gray-900/50 p-3 rounded">
-                <strong>How it works:</strong> The discount is applied to each additional child (2nd, 3rd, etc.). 
-                {formData.siblingDiscountType === 'percentage' 
-                  ? ` Each sibling gets ${formData.siblingDiscountAmount}% off their registration.`
-                  : ` Each sibling gets AED ${formData.siblingDiscountAmount.toFixed(2)} off their registration.`
-                }
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Pricing Section */}
-        <div className="space-y-4">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
-            Pricing Items
-          </h3>
-
-          {/* Select from existing pricing items */}
-          {allPricingItems.length > 0 && (
-            <div className="space-y-2">
-              <label className="label text-sm text-gray-400">Select from existing pricing items:</label>
-              <div className="grid gap-2 max-h-60 overflow-y-auto p-2 bg-gray-800/30 rounded border border-gray-700">
-                {allPricingItems.map((item) => (
-                  <label
-                    key={item.id}
-                    className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-all ${
-                      selectedItemIds.has(item.id)
-                        ? 'border-brand-primary bg-brand-primary/10'
-                        : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedItemIds.has(item.id)}
-                        onChange={() => toggleItemSelection(item.id)}
-                        className="w-4 h-4"
-                      />
-                      <div>
-                        <div className="font-medium text-white flex items-center gap-2">
-                          {item.name}
-                          {item.isRequired && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400">Required</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {item.itemType}
-                          {item.campId && ' • Camp-specific'}
-                          {!item.campId && ' • Global'}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
-                      {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* New items created for this camp */}
-          {newItems.length > 0 && (
-            <div className="space-y-2">
-              <label className="label text-sm text-gray-400">New items for this camp:</label>
-              {newItems.map((item, index) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-green-900/20 rounded border border-green-700">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <div className="font-medium text-white flex items-center gap-2">
-                        {item.name}
-                        <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">New</span>
-                        {item.isRequired && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400">Required</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500">{item.itemType}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
-                      {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveNewItem(index)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Summary */}
-          <div className="flex justify-between items-center py-2 border-t border-gray-700">
-            <span className="text-gray-400 text-sm">
-              {getSelectedItems().length} item(s) selected
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowAddPricing(true)}
-              className="text-sm text-brand-primary hover:underline"
-            >
-              + Create New Item
-            </button>
-          </div>
-
-          {/* Add Pricing Form */}
-          {showAddPricing && (
-            <div className="p-4 bg-gray-800/50 rounded border border-gray-600 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label text-sm">Name *</label>
-                  <input
-                    type="text"
-                    value={newPricing.name}
-                    onChange={(e) => setNewPricing({ ...newPricing, name: e.target.value })}
-                    className="input-field text-sm"
-                    placeholder="e.g., Camp Fee"
-                  />
-                </div>
-                <div>
-                  <label className="label text-sm">Amount (AED)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newPricing.amount}
-                    onChange={(e) => setNewPricing({ ...newPricing, amount: parseFloat(e.target.value) })}
-                    className="input-field text-sm"
-                    placeholder="150.00"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="label text-sm">Description</label>
+                <label className="label">Camp Name *</label>
                 <input
                   type="text"
-                  value={newPricing.description}
-                  onChange={(e) => setNewPricing({ ...newPricing, description: e.target.value })}
-                  className="input-field text-sm"
-                  placeholder="e.g., Full week camp registration"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="input-field"
+                  required
                 />
               </div>
-              <div className="flex gap-4 items-center">
-                <select
-                  value={newPricing.itemType}
-                  onChange={(e) => setNewPricing({ ...newPricing, itemType: e.target.value as any })}
-                  className="input-field text-sm w-40"
-                >
-                  <option value="base_fee">Base Fee</option>
-                  <option value="add_on">Add-on</option>
-                  <option value="discount">Discount</option>
-                </select>
-                <label className="flex items-center gap-2 text-white text-sm">
-                  <input
-                    type="checkbox"
-                    checked={newPricing.isRequired}
-                    onChange={(e) => setNewPricing({ ...newPricing, isRequired: e.target.checked })}
-                  />
-                  Required
-                </label>
+              <div>
+                <label className="label">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="input-field resize-none"
+                  rows={2}
+                />
               </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleAddPricing}
-                  className="btn-primary text-sm py-1 px-3"
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Start Date *</label>
+                  <input
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">End Date *</label>
+                  <input
+                    type="date"
+                    value={formData.endDate}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Min Age</label>
+                  <input
+                    type="number"
+                    value={formData.ageMin}
+                    onChange={(e) => setFormData({ ...formData, ageMin: parseInt(e.target.value) })}
+                    className="input-field"
+                    min="3"
+                    max="18"
+                  />
+                </div>
+                <div>
+                  <label className="label">Max Age</label>
+                  <input
+                    type="number"
+                    value={formData.ageMax}
+                    onChange={(e) => setFormData({ ...formData, ageMax: parseInt(e.target.value) })}
+                    className="input-field"
+                    min="3"
+                    max="18"
+                  />
+                </div>
+                <div>
+                  <label className="label">Max Spots</label>
+                  <input
+                    type="number"
+                    value={formData.maxSpots}
+                    onChange={(e) => setFormData({ ...formData, maxSpots: parseInt(e.target.value) })}
+                    className="input-field"
+                    min="1"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Camp Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  className="input-field"
                 >
-                  Add Item
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddPricing(false)}
-                  className="btn-secondary text-sm py-1 px-3"
-                >
-                  Cancel
-                </button>
+                  <option value="active">Active</option>
+                  <option value="full">Full</option>
+                  <option value="archived">Archived</option>
+                </select>
               </div>
             </div>
-          )}
+
+            {/* Registration Controls Section */}
+            <div className="space-y-4">
+              <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+                Registration Controls
+              </h3>
+              
+              <div>
+                <label className="label">Registration Status</label>
+                <select
+                  value={formData.registrationStatus}
+                  onChange={(e) => setFormData({ ...formData, registrationStatus: e.target.value as 'open' | 'paused' | 'closed' })}
+                  className="input-field"
+                >
+                  <option value="open">🟢 Open - Accepting registrations</option>
+                  <option value="paused">🟡 Paused - Temporarily stopped</option>
+                  <option value="closed">🔴 Closed - No registrations</option>
+                </select>
+                <p className="text-gray-500 text-xs mt-1">
+                  {formData.registrationStatus === 'open' && 'Users can register for this camp'}
+                  {formData.registrationStatus === 'paused' && 'Registration form shows a "paused" message'}
+                  {formData.registrationStatus === 'closed' && 'Registration form is hidden'}
+                </p>
+              </div>
+              
+              <div className="flex items-start gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.waitlistEnabled}
+                    onChange={(e) => setFormData({ ...formData, waitlistEnabled: e.target.checked })}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-gray-300 text-sm">Enable Waitlist</span>
+                </label>
+              </div>
+              
+              {formData.waitlistEnabled && (
+                <div>
+                  <label className="label">Waitlist Message</label>
+                  <input
+                    type="text"
+                    value={formData.waitlistMessage}
+                    onChange={(e) => setFormData({ ...formData, waitlistMessage: e.target.value })}
+                    className="input-field"
+                    placeholder="e.g., We'll contact you if a spot opens up"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Sibling Discount Section */}
+            <div className="space-y-4">
+              <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+                Sibling Discount
+              </h3>
+              
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.siblingDiscountEnabled}
+                  onChange={(e) => setFormData({ ...formData, siblingDiscountEnabled: e.target.checked })}
+                  className="w-4 h-4 rounded"
+                />
+                <span className="text-gray-300 text-sm">Enable sibling discount</span>
+              </label>
+              
+              {formData.siblingDiscountEnabled && (
+                <div className="p-3 bg-gray-800/50 rounded border border-gray-700 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label text-sm">Type</label>
+                      <select
+                        value={formData.siblingDiscountType}
+                        onChange={(e) => setFormData({ ...formData, siblingDiscountType: e.target.value as 'fixed' | 'percentage' })}
+                        className="input-field text-sm"
+                      >
+                        <option value="fixed">Fixed (AED)</option>
+                        <option value="percentage">Percentage (%)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label text-sm">
+                        {formData.siblingDiscountType === 'percentage' ? 'Discount %' : 'Amount (AED)'}
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.siblingDiscountAmount}
+                        onChange={(e) => setFormData({ ...formData, siblingDiscountAmount: parseFloat(e.target.value) || 0 })}
+                        className="input-field text-sm"
+                        min="0"
+                        step={formData.siblingDiscountType === 'percentage' ? '1' : '0.01'}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Applied to each additional child (2nd, 3rd, etc.)
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Pricing Items */}
+          <div className="space-y-4">
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+              Pricing Items
+            </h3>
+
+            {/* Select from existing pricing items */}
+            {allPricingItems.length > 0 && (
+              <div className="space-y-2">
+                <label className="label text-sm text-gray-400">Select from existing:</label>
+                <div className="space-y-1 max-h-64 overflow-y-auto p-2 bg-gray-800/30 rounded border border-gray-700">
+                  {allPricingItems.map((item) => (
+                    <label
+                      key={item.id}
+                      className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all ${
+                        selectedItemIds.has(item.id)
+                          ? 'border-brand-primary bg-brand-primary/10'
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedItemIds.has(item.id)}
+                          onChange={() => toggleItemSelection(item.id)}
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <div className="font-medium text-white text-sm flex items-center gap-1">
+                            {item.name}
+                            {item.isRequired && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-400">Req</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {item.itemType}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`font-bold text-sm ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
+                        {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(0)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* New items created for this camp */}
+            {newItems.length > 0 && (
+              <div className="space-y-1">
+                <label className="label text-sm text-gray-400">New items:</label>
+                {newItems.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between p-2 bg-green-900/20 rounded border border-green-700">
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <div className="font-medium text-white text-sm flex items-center gap-1">
+                          {item.name}
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/50 text-green-400">New</span>
+                        </div>
+                        <div className="text-xs text-gray-500">{item.itemType}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold text-sm ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
+                        AED {Math.abs(item.amount).toFixed(0)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveNewItem(index)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Summary */}
+            <div className="flex justify-between items-center py-2 border-t border-gray-700">
+              <span className="text-gray-400 text-sm">
+                {getSelectedItems().length} item(s) selected
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAddPricing(true)}
+                className="text-sm text-brand-primary hover:underline"
+              >
+                + Create New Item
+              </button>
+            </div>
+
+            {/* Add Pricing Form */}
+            {showAddPricing && (
+              <div className="p-3 bg-gray-800/50 rounded border border-gray-600 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label text-sm">Name *</label>
+                    <input
+                      type="text"
+                      value={newPricing.name}
+                      onChange={(e) => setNewPricing({ ...newPricing, name: e.target.value })}
+                      className="input-field text-sm"
+                      placeholder="Camp Fee"
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-sm">Amount (AED)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={newPricing.amount}
+                      onChange={(e) => setNewPricing({ ...newPricing, amount: parseFloat(e.target.value) })}
+                      className="input-field text-sm"
+                      placeholder="150"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label text-sm">Description</label>
+                  <input
+                    type="text"
+                    value={newPricing.description}
+                    onChange={(e) => setNewPricing({ ...newPricing, description: e.target.value })}
+                    className="input-field text-sm"
+                    placeholder="Full week camp registration"
+                  />
+                </div>
+                <div className="flex gap-3 items-center flex-wrap">
+                  <select
+                    value={newPricing.itemType}
+                    onChange={(e) => setNewPricing({ ...newPricing, itemType: e.target.value as any })}
+                    className="input-field text-sm flex-1 min-w-[120px]"
+                  >
+                    <option value="base_fee">Base Fee</option>
+                    <option value="add_on">Add-on</option>
+                    <option value="discount">Discount</option>
+                  </select>
+                  <label className="flex items-center gap-1 text-white text-sm">
+                    <input
+                      type="checkbox"
+                      checked={newPricing.isRequired}
+                      onChange={(e) => setNewPricing({ ...newPricing, isRequired: e.target.checked })}
+                    />
+                    Required
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddPricing}
+                    className="btn-primary text-sm py-1 px-3"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPricing(false)}
+                    className="btn-secondary text-sm py-1 px-3"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Submit Buttons */}
-        <div className="flex gap-3 pt-4 border-t border-gray-700">
+        {/* Submit Buttons - Full Width */}
+        <div className="flex gap-3 pt-6 mt-6 border-t border-gray-700">
           <button type="submit" className="btn-primary flex-1">
-            {camp ? 'Update Camp' : 'Create Camp'}
+            {isDuplicate ? '📋 Create Duplicate' : camp ? 'Update Camp' : 'Create Camp'}
           </button>
           <button type="button" onClick={onCancel} className="btn-secondary">
             Cancel
