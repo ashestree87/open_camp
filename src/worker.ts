@@ -1335,6 +1335,21 @@ export default {
         return handleLegacyStatus(env, cors)
       }
       
+      // Debug endpoint for checking env vars (only shows presence, not values)
+      if (path === '/api/debug-env' && method === 'GET') {
+        return jsonResponse({
+          hasDB: !!env.DB,
+          hasKV: !!env.KV,
+          hasStripeKey: !!env.STRIPE_SECRET_KEY,
+          stripeKeyLength: env.STRIPE_SECRET_KEY?.length || 0,
+          stripeKeyPrefix: env.STRIPE_SECRET_KEY?.substring(0, 7) || 'none',
+          hasStripeWebhookSecret: !!env.STRIPE_WEBHOOK_SECRET,
+          hasResendKey: !!env.RESEND_API_KEY,
+          hasAllowedOrigin: !!env.ALLOWED_ORIGIN,
+          envKeys: Object.keys(env || {}),
+        }, 200, cors)
+      }
+      
       return errorResponse('Not found', 404, cors)
     } catch (error) {
       console.error('Unhandled error:', error)

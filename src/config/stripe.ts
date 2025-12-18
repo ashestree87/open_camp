@@ -1,5 +1,3 @@
 // Stripe configuration
-// Replace with your actual Stripe publishable key from https://dashboard.stripe.com/apikeys
-
-export const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_YOUR_KEY_HERE'
+export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51NhNiGL8waXIEe9pXuo7hQPpaIPaMqvvRERhIQUwrtStz0KVo2dixzB4X0kcQyR7cS1QdH0Z2tChLwkH3ZjQCGkg00ZbJVchdg'
 
