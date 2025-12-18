@@ -7,6 +7,7 @@ import { Camp, PricingItem } from '../types'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { STRIPE_PUBLISHABLE_KEY } from '../config/stripe'
+import { useToast } from '../components/Toast'
 
 // Initialize Stripe
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY)
@@ -84,6 +85,7 @@ export default function RegistrationFormEnhanced() {
   const [siblingDiscount, setSiblingDiscount] = useState(0)
   const [clientSecret, setClientSecret] = useState<string>('')
   const [step, setStep] = useState<'form' | 'payment'>('form')
+  const { showToast } = useToast()
 
   // Load saved form data from localStorage
   const getSavedFormData = () => {
@@ -241,15 +243,15 @@ export default function RegistrationFormEnhanced() {
 
   const onSubmitForm = async (data: MultiChildFormData) => {
     if (!selectedCamp) {
-      alert('Please select a camp')
+      showToast('Please select a camp', 'warning')
       return
     }
 
     // Check if enough spots available
     const spotsNeeded = data.children.length
     const spotsLeft = selectedCamp.maxSpots - selectedCamp.spotsTaken
-    if (spotsNeeded > spotsLeft) {
-      alert(`Only ${spotsLeft} spots available, but you're registering ${spotsNeeded} children.`)
+    if (spotsNeeded > spotsLeft && !selectedCamp.waitlistEnabled) {
+      showToast(`Only ${spotsLeft} spots available, but you're registering ${spotsNeeded} children.`, 'error')
       return
     }
 
@@ -337,7 +339,7 @@ export default function RegistrationFormEnhanced() {
 
       setStep('payment')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to process registration')
+      showToast(err instanceof Error ? err.message : 'Failed to process registration', 'error')
     }
   }
 

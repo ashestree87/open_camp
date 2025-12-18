@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Camp, PricingItem } from '../types'
+import { useToast } from '../components/Toast'
 
 const STORAGE_KEY = 'opencamp_admin_token'
 
@@ -244,6 +245,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
   const [showForm, setShowForm] = useState(false)
   const [editingCamp, setEditingCamp] = useState<Camp | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const { showToast, showConfirm } = useToast()
 
   useEffect(() => {
     loadCamps()
@@ -274,7 +276,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
       
       if (!response.ok) {
         const errorMsg = data.details || data.error || data.hint || 'Unknown error'
-        alert(`Error: ${errorMsg}`)
+        showToast(errorMsg, 'error')
         console.error('Camp creation failed:', data)
         return
       }
@@ -317,35 +319,38 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
       loadCamps()
       setShowForm(false)
       setEditingCamp(null)
+      showToast('Camp saved successfully!', 'success')
     } catch (error) {
-      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      showToast(error instanceof Error ? error.message : 'Network error', 'error')
       console.error('Network error:', error)
     }
   }
 
-  const handleArchiveCamp = async (id: number, currentStatus: string) => {
+  const handleArchiveCamp = (id: number, currentStatus: string) => {
     const isArchived = currentStatus === 'archived'
-    if (!confirm(isArchived ? 'Restore this camp?' : 'Archive this camp?')) return
-    
-    if (isArchived) {
-      // Restore: update status back to active
-      await fetch(`/api/camps/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ status: 'active' }),
-      })
-    } else {
-      // Archive: use DELETE which sets status to archived
-      await fetch(`/api/camps/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      })
-    }
-    
-    loadCamps()
+    showConfirm(
+      isArchived ? 'Are you sure you want to restore this camp?' : 'Are you sure you want to archive this camp?',
+      async () => {
+        if (isArchived) {
+          await fetch(`/api/camps/${id}`, {
+            method: 'PUT',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ status: 'active' }),
+          })
+          showToast('Camp restored successfully!', 'success')
+        } else {
+          await fetch(`/api/camps/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
+          })
+          showToast('Camp archived successfully!', 'success')
+        }
+        loadCamps()
+      }
+    )
   }
 
   if (showForm || editingCamp) {
@@ -394,13 +399,27 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
             <div key={camp.id} className={`card ${camp.status === 'archived' || hasEnded ? 'opacity-60' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
                     {camp.status === 'archived' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Archived</span>
                     )}
                     {hasEnded && camp.status !== 'archived' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-400">Ended</span>
+                    )}
+                    {/* Registration Status Badge */}
+                    {camp.status !== 'archived' && !hasEnded && (
+                      camp.registrationStatus === 'paused' ? (
+                        <span className="text-xs px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-400">⏸️ Paused</span>
+                      ) : camp.registrationStatus === 'closed' ? (
+                        <span className="text-xs px-2 py-0.5 rounded bg-red-900/50 text-red-400">🔒 Closed</span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">🟢 Open</span>
+                      )
+                    )}
+                    {/* Waitlist Badge */}
+                    {camp.waitlistEnabled && camp.status !== 'archived' && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-purple-900/50 text-purple-400">📋 Waitlist</span>
                     )}
                   </div>
                   <p className="text-gray-400 text-sm mt-1">{camp.description}</p>
@@ -421,7 +440,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
                     onClick={() => {
                       const url = `${window.location.origin}/camp/${camp.id}`
                       navigator.clipboard.writeText(url)
-                      alert('Registration link copied!\n\n' + url)
+                      showToast('Registration link copied to clipboard!', 'success')
                     }}
                     className="btn-secondary text-sm py-1 px-3 text-green-400 hover:bg-green-900/20"
                     title="Copy registration link"
@@ -984,6 +1003,7 @@ function PricingTab({ token }: { token: string }) {
   const [showForm, setShowForm] = useState(false)
   const [editingItem, setEditingItem] = useState<PricingItem | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const { showToast, showConfirm } = useToast()
 
   useEffect(() => {
     loadItems()
@@ -1002,19 +1022,22 @@ function PricingTab({ token }: { token: string }) {
     setCamps(data.camps || [])
   }
 
-  const handleArchive = async (id: number, currentlyActive: boolean) => {
-    if (!confirm(`${currentlyActive ? 'Archive' : 'Restore'} this pricing item?`)) return
-    
-    await fetch(`/api/pricing/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ isActive: !currentlyActive }),
-    })
-    
-    loadItems()
+  const handleArchive = (id: number, currentlyActive: boolean) => {
+    showConfirm(
+      currentlyActive ? 'Are you sure you want to archive this pricing item?' : 'Are you sure you want to restore this pricing item?',
+      async () => {
+        await fetch(`/api/pricing/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ isActive: !currentlyActive }),
+        })
+        showToast(currentlyActive ? 'Pricing item archived!' : 'Pricing item restored!', 'success')
+        loadItems()
+      }
+    )
   }
 
   const handleSubmit = async (itemData: Partial<PricingItem>) => {
@@ -1034,15 +1057,16 @@ function PricingTab({ token }: { token: string }) {
       const data = await response.json()
       
       if (!response.ok) {
-        alert(`Error: ${data.details || data.error || 'Failed to save pricing item'}`)
+        showToast(data.details || data.error || 'Failed to save pricing item', 'error')
         return
       }
       
       loadItems()
       setShowForm(false)
       setEditingItem(null)
+      showToast('Pricing item saved successfully!', 'success')
     } catch (error) {
-      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      showToast(error instanceof Error ? error.message : 'Network error', 'error')
     }
   }
 
@@ -1544,6 +1568,7 @@ function RegistrationDetail({
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState(registration)
+  const { showToast } = useToast()
 
   const getCampName = (campId: number) => camps.find(c => c.id === campId)?.name || 'Unknown'
 
@@ -1593,8 +1618,9 @@ function RegistrationDetail({
       
       onUpdate(formData)
       setIsEditing(false)
+      showToast('Registration updated successfully!', 'success')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to save')
+      showToast(error instanceof Error ? error.message : 'Failed to save', 'error')
     } finally {
       setSaving(false)
     }
@@ -1969,6 +1995,7 @@ function AdminNotesSection({
   const [newNote, setNewNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [notes, setNotes] = useState<Array<{ text: string; timestamp: string }>>([])
+  const { showToast, showConfirm } = useToast()
 
   // Parse existing notes on mount
   useEffect(() => {
@@ -2029,39 +2056,41 @@ function AdminNotesSection({
       setNotes(updatedNotes)
       onUpdate(notesJson)
       setNewNote('')
+      showToast('Note added successfully!', 'success')
     } catch (error) {
-      alert('Failed to save note')
+      showToast('Failed to save note', 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteNote = async (index: number) => {
-    if (!confirm('Delete this note?')) return
-    
-    setSaving(true)
-    const updatedNotes = notes.filter((_, i) => i !== index)
-    const notesJson = updatedNotes.length > 0 ? JSON.stringify(updatedNotes) : ''
-    
-    try {
-      const response = await fetch(`/api/registrations/${registrationId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ admin_notes: notesJson }),
-      })
+  const handleDeleteNote = (index: number) => {
+    showConfirm('Are you sure you want to delete this note?', async () => {
+      setSaving(true)
+      const updatedNotes = notes.filter((_, i) => i !== index)
+      const notesJson = updatedNotes.length > 0 ? JSON.stringify(updatedNotes) : ''
       
-      if (!response.ok) throw new Error('Failed to delete')
-      
-      setNotes(updatedNotes)
-      onUpdate(notesJson)
-    } catch (error) {
-      alert('Failed to delete note')
-    } finally {
-      setSaving(false)
-    }
+      try {
+        const response = await fetch(`/api/registrations/${registrationId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ admin_notes: notesJson }),
+        })
+        
+        if (!response.ok) throw new Error('Failed to delete')
+        
+        setNotes(updatedNotes)
+        onUpdate(notesJson)
+        showToast('Note deleted!', 'success')
+      } catch (error) {
+        showToast('Failed to delete note', 'error')
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   return (
