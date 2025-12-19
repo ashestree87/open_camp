@@ -11,6 +11,14 @@ A production-ready, open-source camp registration system with payments, multi-ca
 
 ---
 
+## 🌐 Live Demo
+
+- Public site: [camp.eighty7.uk](https://camp.eighty7.uk)
+- Admin dashboard: [camp.eighty7.uk/admin](https://camp.eighty7.uk/admin)
+- Demo credentials: `admin` / `admin123`
+
+---
+
 ## ✨ Features
 
 ### Public Registration
