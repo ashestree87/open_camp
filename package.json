@@ -13,8 +13,8 @@
     "deploy:pages": "npm run build && wrangler pages deploy dist",
     "deploy:worker": "wrangler deploy src/worker.ts",
     "db:create": "wrangler d1 create open-camp-db",
-    "db:migrate": "wrangler d1 execute open-camp-db --file=./migrations/001_init.sql",
-    "db:migrate:local": "wrangler d1 execute open-camp-db --local --file=./migrations/001_init.sql",
+    "db:migrate": "wrangler d1 execute open-camp-db --file=./migrations/001_schema.sql",
+    "db:migrate:local": "wrangler d1 execute open-camp-db --local --file=./migrations/001_schema.sql",
     "kv:create": "wrangler kv:namespace create KV",
     "kv:setup": "tsx scripts/setup-kv.ts",
     "typecheck": "tsc && tsc -p tsconfig.worker.json"
