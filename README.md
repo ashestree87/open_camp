@@ -239,6 +239,7 @@ open-camp/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/config` | Get app configuration (branding) |
 | GET | `/api/status` | Get registration status (legacy) |
 | GET | `/api/camps` | List active camps |
 | GET | `/api/camps/:id` | Get camp details |
@@ -302,9 +303,35 @@ npx wrangler d1 execute open-camp-db --local --file=./migrations/001_schema.sql
 
 ## 🎨 Customization
 
-### Branding
+### Quick Configuration (Environment Variables)
 
-1. **Colors** - Edit `tailwind.config.js`:
+Most branding can be configured via environment variables—no code changes needed.
+
+**Backend (wrangler.toml or Pages dashboard):**
+
+```toml
+[vars]
+ORG_NAME = "My Club"
+ORG_TAGLINE = "Youth Programs"
+CONTACT_EMAIL = "hello@myclub.com"
+SUPPORT_EMAIL = "support@myclub.com"
+FROM_EMAIL = "My Club <hello@myclub.com>"
+```
+
+**Frontend (.env.local):**
+
+```bash
+VITE_ORG_NAME=My Club
+VITE_ORG_TAGLINE=Youth Programs
+VITE_CONTACT_EMAIL=hello@myclub.com
+VITE_LOGO_URL=/my-logo.png    # or leave empty for text logo
+VITE_LOGO_TEXT=MC              # Text shown if no logo URL
+VITE_PRIMARY_COLOR=#8B1538
+```
+
+### Advanced Customization
+
+**Colors** - Edit `tailwind.config.js`:
 ```javascript
 colors: {
   brand: {
@@ -316,15 +343,17 @@ colors: {
 }
 ```
 
-2. **Logo** - Update `src/components/Header.tsx`
+**Logo** - Either:
+- Set `VITE_LOGO_URL` to an image URL, or
+- Set `VITE_LOGO_TEXT` for a text-based logo
 
-3. **Fonts** - Update `index.html` and `tailwind.config.js`
+**Fonts** - Update `index.html` Google Fonts link and `tailwind.config.js`
 
-4. **Email template** - Edit email HTML in `src/worker.ts`
+**Meta tags** - Update `index.html` for SEO/social sharing
 
 ### Theme
 
-The app supports dark/light mode. Customize colors in:
+The app supports dark/light mode (toggle in header). Customize:
 - `src/index.css` - Base styles and component classes
 - `tailwind.config.js` - Color palette
 

@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useTheme } from './ThemeContext'
+import { useAppConfig } from '../config/app'
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme()
+  const config = useAppConfig()
   
   return (
     <header className={`sticky top-0 z-50 border-b transition-colors duration-200 ${
@@ -13,20 +15,30 @@ export default function Header() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3 sm:gap-4">
-            {/* Logo Placeholder */}
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-primary to-brand-dark rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg">
-              <span className="text-white font-heading text-xl sm:text-2xl font-bold">O</span>
-            </div>
+            {/* Logo - supports image URL or text fallback */}
+            {config.logoUrl ? (
+              <img 
+                src={config.logoUrl} 
+                alt={config.orgName} 
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-contain flex-shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-primary to-brand-dark rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg">
+                <span className="text-white font-heading text-xl sm:text-2xl font-bold">
+                  {config.logoText}
+                </span>
+              </div>
+            )}
             
             {/* Title */}
             <div className="min-w-0">
               <h1 className={`font-heading text-lg sm:text-xl md:text-2xl font-bold uppercase tracking-wide truncate ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
-                Open Camp
+                {config.orgName}
               </h1>
               <p className="text-brand-primary font-heading text-xs sm:text-sm uppercase tracking-wider">
-                Kids Camp Registration
+                {config.orgTagline}
               </p>
             </div>
           </Link>

@@ -35,7 +35,14 @@ id = "YOUR_KV_NAMESPACE_ID"  # Get from: wrangler kv namespace create open-camp-
 [vars]
 ALLOWED_ORIGIN = "https://your-domain.pages.dev"  # Update with your Pages domain
 
-# Secrets (set via wrangler secret put):
+# Organization/Branding (optional - defaults shown)
+ORG_NAME = "Open Camp"
+ORG_TAGLINE = "Kids Camp Registration"
+CONTACT_EMAIL = "hello@example.com"
+SUPPORT_EMAIL = "support@example.com"
+FROM_EMAIL = "Open Camp <hello@example.com>"  # For outgoing emails
+
+# Secrets (set via wrangler secret put or Pages dashboard):
 # - RESEND_API_KEY: Your Resend API key for email notifications
 # - STRIPE_SECRET_KEY: Your Stripe secret key for payments
 # - STRIPE_WEBHOOK_SECRET: Your Stripe webhook secret (optional)

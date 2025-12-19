@@ -9,6 +9,33 @@ interface Env {
   RESEND_API_KEY?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  // Configurable branding/org settings
+  ORG_NAME?: string
+  ORG_TAGLINE?: string
+  CONTACT_EMAIL?: string
+  SUPPORT_EMAIL?: string
+  FROM_EMAIL?: string
+}
+
+// App configuration with defaults
+interface AppConfig {
+  orgName: string
+  orgTagline: string
+  contactEmail: string
+  supportEmail: string
+  fromEmail: string
+}
+
+function getConfig(env: Env): AppConfig {
+  const orgName = env.ORG_NAME || 'Open Camp'
+  const contactEmail = env.CONTACT_EMAIL || 'hello@example.com'
+  return {
+    orgName,
+    orgTagline: env.ORG_TAGLINE || 'Kids Camp Registration',
+    contactEmail,
+    supportEmail: env.SUPPORT_EMAIL || contactEmail,
+    fromEmail: env.FROM_EMAIL || `${orgName} <${contactEmail}>`,
+  }
 }
 
 // Types
@@ -106,11 +133,8 @@ interface RegistrationData {
   // Total and payment
   totalAmount?: number
   paymentStatus?: string
+  registrationStatus?: string
 }
-
-// Constants
-const CLUB_EMAIL = 'hello@ash-lane.com'
-const FROM_EMAIL = 'Open Camp <hello@ash-lane.com>'
 
 // Helper Functions
 function corsHeaders(origin: string | null, allowedOrigin?: string): HeadersInit {
@@ -961,6 +985,7 @@ async function handleSubmit(request: Request, env: Env, cors: HeadersInit): Prom
 async function sendEmails(env: Env, parentEmail: string, childNames: string, parentName: string, phone: string, campId: number) {
   if (!env.RESEND_API_KEY) return
   
+  const config = getConfig(env)
   const camp = await env.DB.prepare('SELECT name FROM camps WHERE id = ?').bind(campId).first()
   const campName = (camp as any)?.name || 'Camp'
   
@@ -972,14 +997,14 @@ async function sendEmails(env: Env, parentEmail: string, childNames: string, par
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: FROM_EMAIL,
+      from: config.fromEmail,
       to: parentEmail,
       subject: `Registration Confirmed - ${campName}`,
-      text: `Dear ${parentName},\n\nThank you for registering ${childNames} for ${campName}.\n\nWe look forward to seeing you!\n\nBest regards,\nOpen Camp Team`
+      text: `Dear ${parentName},\n\nThank you for registering ${childNames} for ${campName}.\n\nWe look forward to seeing you!\n\nBest regards,\n${config.orgName} Team`
     }),
   })
   
-  // Send notification to club
+  // Send notification to organization
   await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -987,8 +1012,8 @@ async function sendEmails(env: Env, parentEmail: string, childNames: string, par
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: FROM_EMAIL,
-      to: CLUB_EMAIL,
+      from: config.fromEmail,
+      to: config.contactEmail,
       subject: `New Registration - ${campName}`,
       text: `New registration received!\n\nChild(ren): ${childNames}\nParent: ${parentName}\nEmail: ${parentEmail}\nPhone: ${phone}\nCamp: ${campName}`
     }),
@@ -1333,6 +1358,17 @@ export default {
       // Legacy status endpoint (for old single-camp mode)
       if (path === '/api/status' && method === 'GET') {
         return handleLegacyStatus(env, cors)
+      }
+      
+      // Public config endpoint (for frontend branding)
+      if (path === '/api/config' && method === 'GET') {
+        const config = getConfig(env)
+        return jsonResponse({
+          orgName: config.orgName,
+          orgTagline: config.orgTagline,
+          contactEmail: config.contactEmail,
+          supportEmail: config.supportEmail,
+        }, 200, cors)
       }
       
       // Debug endpoint for checking env vars (only shows presence, not values)
