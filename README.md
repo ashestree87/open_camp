@@ -7,7 +7,7 @@ A production-ready, open-source camp registration system with payments, multi-ca
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)
 ![Stripe](https://img.shields.io/badge/payments-Stripe-blueviolet.svg)
 
-> **💼 Need a hosted solution?** Custom hosted and branded versions available – [contact us](mailto:developer@example.com) for pricing.
+> **💼 Need a hosted solution?** Custom hosted and branded versions available – [contact us](mailto:hello@ash-lane.com) for pricing.
 
 ---
 
@@ -362,7 +362,7 @@ Don't want to self-host? **Custom branded and hosted solutions available:**
 - ✅ Email notifications
 - ✅ Ongoing support
 
-[Contact us](mailto:developer@example.com) for pricing.
+[Contact us](mailto:hello@ash-lane.com) for pricing.
 
 ---
 

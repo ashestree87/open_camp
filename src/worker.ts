@@ -109,8 +109,8 @@ interface RegistrationData {
 }
 
 // Constants
-const CLUB_EMAIL = 'camp@example.com'
-const FROM_EMAIL = 'Open Camp <noreply@example.com>'
+const CLUB_EMAIL = 'hello@ash-lane.com'
+const FROM_EMAIL = 'Open Camp <hello@ash-lane.com>'
 
 // Helper Functions
 function corsHeaders(origin: string | null, allowedOrigin?: string): HeadersInit {
