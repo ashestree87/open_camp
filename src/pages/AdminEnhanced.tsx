@@ -112,7 +112,7 @@ export default function AdminEnhanced() {
   if (auth.loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-400">Loading...</div>
+        <div className="dark:text-gray-400 light:text-gray-600">Loading...</div>
       </div>
     )
   }
@@ -121,7 +121,7 @@ export default function AdminEnhanced() {
     return (
       <div className="max-w-md mx-auto mt-8">
         <div className="card">
-          <h2 className="font-heading text-2xl font-bold text-white uppercase mb-6 text-center">
+          <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 uppercase mb-6 text-center">
             Admin Login
           </h2>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -162,7 +162,7 @@ export default function AdminEnhanced() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="font-heading text-3xl font-bold text-white uppercase">
+        <h1 className="font-heading text-3xl font-bold dark:text-white light:text-gray-900 uppercase">
           Admin Dashboard
         </h1>
         <button onClick={handleLogout} className="btn-secondary">
@@ -170,8 +170,8 @@ export default function AdminEnhanced() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-700">
+      {/* Tabs - scrollable on mobile */}
+      <div className="flex gap-1 sm:gap-2 mb-6 border-b dark:border-gray-700 light:border-gray-300 overflow-x-auto pb-px -mb-px">
         {[
           { id: 'dashboard', label: 'Dashboard' },
           { id: 'camps', label: 'Camps' },
@@ -181,10 +181,10 @@ export default function AdminEnhanced() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as TabType)}
-            className={`px-4 py-2 font-heading uppercase transition-colors ${
+            className={`px-3 sm:px-4 py-2 font-heading text-sm sm:text-base uppercase transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === tab.id
-                ? 'text-brand-primary border-b-2 border-brand-primary'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-brand-primary border-b-2 border-brand-primary -mb-px'
+                : 'dark:text-gray-400 light:text-gray-600 hover:dark:text-white hover:light:text-gray-900'
             }`}
           >
             {tab.label}
@@ -221,19 +221,19 @@ function DashboardTab() {
         <div className="text-4xl font-heading font-bold text-brand-primary">
           {stats.camps?.length || 0}
         </div>
-        <div className="text-gray-400 text-sm mt-1">Active Camps</div>
+        <div className="dark:text-gray-400 light:text-gray-600 text-sm mt-1">Active Camps</div>
       </div>
       <div className="card">
         <div className="text-4xl font-heading font-bold text-green-400">
           {stats.camps?.reduce((sum: number, c: any) => sum + (c.maxSpots - c.spotsTaken), 0) || 0}
         </div>
-        <div className="text-gray-400 text-sm mt-1">Total Spots Available</div>
+        <div className="dark:text-gray-400 light:text-gray-600 text-sm mt-1">Total Spots Available</div>
       </div>
       <div className="card">
-        <div className="text-4xl font-heading font-bold text-white">
+        <div className="text-4xl font-heading font-bold dark:text-white light:text-gray-900">
           {stats.camps?.reduce((sum: number, c: any) => sum + c.spotsTaken, 0) || 0}
         </div>
-        <div className="text-gray-400 text-sm mt-1">Total Registrations</div>
+        <div className="dark:text-gray-400 light:text-gray-600 text-sm mt-1">Total Registrations</div>
       </div>
     </div>
   )
@@ -457,7 +457,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
     <div>
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-heading text-xl font-bold text-white uppercase">
+        <h2 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase">
           Manage Camps
         </h2>
         <button onClick={() => setShowForm(true)} className="btn-primary">
@@ -476,7 +476,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-field w-full pl-10"
             />
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 dark:text-gray-500 light:text-gray-500">🔍</span>
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -484,7 +484,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
           >
             <span>⚙️ Filters</span>
             {activeFilterCount > 0 && (
-              <span className="bg-brand-primary text-white text-xs px-2 py-0.5 rounded-full">
+              <span className="bg-brand-primary dark:text-white light:text-gray-900 text-xs px-2 py-0.5 rounded-full">
                 {activeFilterCount}
               </span>
             )}
@@ -492,7 +492,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
         </div>
 
         {showFilters && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-4">
+          <div className="dark:bg-gray-800/50 light:bg-gray-100 border dark:border-gray-700 light:border-gray-300 rounded-lg p-4 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="label text-xs">Date Range</label>
@@ -533,7 +533,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
                 </select>
               </div>
               <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer pb-2">
+                <label className="flex items-center gap-2 text-sm dark:text-gray-400 light:text-gray-600 cursor-pointer pb-2">
                   <input
                     type="checkbox"
                     checked={showArchived}
@@ -545,8 +545,8 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
               </div>
             </div>
             {activeFilterCount > 0 && (
-              <div className="flex justify-between items-center pt-2 border-t border-gray-700">
-                <span className="text-sm text-gray-400">
+              <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700 light:border-gray-300">
+                <span className="text-sm dark:text-gray-400 light:text-gray-600">
                   Showing {filteredCamps.length} of {camps.length} camps
                 </span>
                 <button onClick={clearAllFilters} className="text-sm text-brand-primary hover:underline">
@@ -558,7 +558,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
         )}
 
         {!showFilters && (
-          <div className="flex gap-4 text-sm text-gray-500">
+          <div className="flex gap-4 text-sm dark:text-gray-500 light:text-gray-500">
             <span>{filteredCamps.length} camp{filteredCamps.length !== 1 ? 's' : ''}</span>
             {activeFilterCount > 0 && (
               <button onClick={clearAllFilters} className="text-brand-primary hover:underline">
@@ -572,7 +572,7 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
       {/* Camp List */}
       <div className="space-y-4">
         {filteredCamps.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 dark:text-gray-500 light:text-gray-500">
             <p className="text-lg mb-2">No camps found</p>
             <p className="text-sm">Try adjusting your filters or create a new camp</p>
           </div>
@@ -584,95 +584,95 @@ function CampsTab({ token, onViewRegistrations }: { token: string; onViewRegistr
           
           return (
             <div key={camp.id} className={`card ${camp.status === 'archived' || hasEnded ? 'opacity-60' : ''}`}>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
+              {/* Camp Info */}
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
+                    <h3 className="font-heading text-lg font-bold dark:text-white light:text-gray-900">{camp.name}</h3>
                     {camp.status === 'archived' && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Archived</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-700 dark:text-gray-400 light:text-gray-600">Archived</span>
                     )}
                     {hasEnded && camp.status !== 'archived' && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-400">Ended</span>
+                      <span className="text-xs px-2 py-0.5 rounded dark:bg-yellow-900/50 light:bg-yellow-100 dark:text-yellow-400 light:text-yellow-700">Ended</span>
                     )}
-                    {/* Registration Status Badge */}
                     {camp.status !== 'archived' && !hasEnded && (
                       camp.registrationStatus === 'paused' ? (
-                        <span className="text-xs px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-400">⏸️ Paused</span>
+                        <span className="text-xs px-2 py-0.5 rounded dark:bg-yellow-900/50 light:bg-yellow-100 dark:text-yellow-400 light:text-yellow-700">⏸️ Paused</span>
                       ) : camp.registrationStatus === 'closed' ? (
-                        <span className="text-xs px-2 py-0.5 rounded bg-red-900/50 text-red-400">🔒 Closed</span>
+                        <span className="text-xs px-2 py-0.5 rounded dark:bg-red-900/50 light:bg-red-100 dark:text-red-400 light:text-red-700">🔒 Closed</span>
                       ) : (
-                        <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">🟢 Open</span>
+                        <span className="text-xs px-2 py-0.5 rounded dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700">🟢 Open</span>
                       )
                     )}
-                    {/* Waitlist Badge */}
                     {camp.waitlistEnabled && camp.status !== 'archived' && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-purple-900/50 text-purple-400">📋 Waitlist</span>
+                      <span className="text-xs px-2 py-0.5 rounded dark:bg-purple-900/50 light:bg-purple-100 dark:text-purple-400 light:text-purple-700">📋 Waitlist</span>
                     )}
                   </div>
-                  <p className="text-gray-400 text-sm mt-1">{camp.description}</p>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <span className="text-gray-500">
-                      📅 {camp.startDate} to {camp.endDate}
-                    </span>
-                    <span className="text-gray-500">
-                      👥 Ages {camp.ageMin}-{camp.ageMax}
-                    </span>
+                  <p className="dark:text-gray-400 light:text-gray-600 text-sm mt-1 line-clamp-2">{camp.description}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
+                    <span className="dark:text-gray-500 light:text-gray-500">📅 {camp.startDate} to {camp.endDate}</span>
+                    <span className="dark:text-gray-500 light:text-gray-500">👥 Ages {camp.ageMin}-{camp.ageMax}</span>
                     <span className={camp.spotsTaken >= camp.maxSpots ? 'text-red-400' : 'text-green-400'}>
                       {camp.maxSpots - camp.spotsTaken}/{camp.maxSpots} spots
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  {/* Primary Actions */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onViewRegistrations(camp.id)}
-                      className="btn-primary text-sm py-1.5 px-4"
-                    >
-                      View Registrations
+                
+                {/* Primary Action - Desktop */}
+                <div className="hidden sm:flex gap-2 flex-shrink-0">
+                  <button onClick={() => onViewRegistrations(camp.id)} className="btn-primary text-sm py-1.5 px-3">
+                    Registrations
+                  </button>
+                  {!hasEnded && camp.status !== 'archived' && (
+                    <button onClick={() => setEditingCamp(camp)} className="btn-secondary text-sm py-1.5 px-3">
+                      Edit
                     </button>
-                    {!hasEnded && camp.status !== 'archived' && (
-                      <button
-                        onClick={() => setEditingCamp(camp)}
-                        className="btn-secondary text-sm py-1.5 px-4"
-                      >
-                        ✏️ Edit
-                      </button>
-                    )}
-                  </div>
-                  {/* Secondary Actions */}
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/camp/${camp.id}`
-                        navigator.clipboard.writeText(url)
-                        showToast('Registration link copied to clipboard!', 'success')
-                      }}
-                      className="text-xs py-1 px-2 text-gray-400 hover:text-green-400 hover:bg-green-900/20 rounded transition-colors"
-                      title="Copy registration link"
-                    >
-                      🔗 Copy Link
+                  )}
+                </div>
+              </div>
+              
+              {/* Actions - Mobile-first layout */}
+              <div className="mt-4 pt-3 border-t dark:border-gray-700 light:border-gray-200">
+                {/* Mobile Primary Actions */}
+                <div className="flex sm:hidden gap-2 mb-3">
+                  <button onClick={() => onViewRegistrations(camp.id)} className="btn-primary text-sm py-2 px-4 flex-1">
+                    View Registrations
+                  </button>
+                  {!hasEnded && camp.status !== 'archived' && (
+                    <button onClick={() => setEditingCamp(camp)} className="btn-secondary text-sm py-2 px-4">
+                      Edit
                     </button>
-                    <span className="text-gray-600">|</span>
-                    <button
-                      onClick={() => handleDuplicate(camp)}
-                      className="text-xs py-1 px-2 text-gray-400 hover:text-purple-400 hover:bg-purple-900/20 rounded transition-colors"
-                      title="Create a copy of this camp"
-                    >
-                      📋 Duplicate
-                    </button>
-                    <span className="text-gray-600">|</span>
-                    <button
-                      onClick={() => handleArchiveCamp(camp.id, camp.status)}
-                      className={`text-xs py-1 px-2 rounded transition-colors ${
-                        camp.status === 'archived' 
-                          ? 'text-gray-400 hover:text-green-400 hover:bg-green-900/20' 
-                          : 'text-gray-400 hover:text-red-400 hover:bg-red-900/20'
-                      }`}
-                    >
-                      {camp.status === 'archived' ? '↩️ Restore' : '🗑️ Archive'}
-                    </button>
-                  </div>
+                  )}
+                </div>
+                
+                {/* Secondary Actions */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/camp/${camp.id}`
+                      navigator.clipboard.writeText(url)
+                      showToast('Link copied!', 'success')
+                    }}
+                    className="text-xs py-1.5 px-3 dark:bg-gray-800 light:bg-gray-100 dark:text-gray-300 light:text-gray-600 hover:text-green-400 rounded transition-colors"
+                  >
+                    🔗 Copy Link
+                  </button>
+                  <button
+                    onClick={() => handleDuplicate(camp)}
+                    className="text-xs py-1.5 px-3 dark:bg-gray-800 light:bg-gray-100 dark:text-gray-300 light:text-gray-600 hover:text-purple-400 rounded transition-colors"
+                  >
+                    📋 Duplicate
+                  </button>
+                  <button
+                    onClick={() => handleArchiveCamp(camp.id, camp.status)}
+                    className={`text-xs py-1.5 px-3 rounded transition-colors dark:bg-gray-800 light:bg-gray-100 ${
+                      camp.status === 'archived' 
+                        ? 'dark:text-gray-300 light:text-gray-600 hover:text-green-400' 
+                        : 'dark:text-gray-300 light:text-gray-600 hover:text-red-400'
+                    }`}
+                  >
+                    {camp.status === 'archived' ? '↩️ Restore' : '🗑️ Archive'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -803,7 +803,7 @@ function CampForm({
 
   return (
     <div className="card max-w-5xl">
-      <h2 className="font-heading text-xl font-bold text-white uppercase mb-4">
+      <h2 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
         {isDuplicate ? '📋 Duplicate Camp' : camp ? 'Edit Camp' : 'Create New Camp'}
       </h2>
       <form onSubmit={handleSubmit}>
@@ -813,7 +813,7 @@ function CampForm({
           <div className="space-y-6">
             {/* Basic Info Section */}
             <div className="space-y-4">
-              <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+              <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">
                 Camp Details
               </h3>
               <div>
@@ -907,7 +907,7 @@ function CampForm({
 
             {/* Registration Controls Section */}
             <div className="space-y-4">
-              <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+              <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">
                 Registration Controls
               </h3>
               
@@ -922,7 +922,7 @@ function CampForm({
                   <option value="paused">🟡 Paused - Temporarily stopped</option>
                   <option value="closed">🔴 Closed - No registrations</option>
                 </select>
-                <p className="text-gray-500 text-xs mt-1">
+                <p className="dark:text-gray-500 light:text-gray-500 text-xs mt-1">
                   {formData.registrationStatus === 'open' && 'Users can register for this camp'}
                   {formData.registrationStatus === 'paused' && 'Registration form shows a "paused" message'}
                   {formData.registrationStatus === 'closed' && 'Registration form is hidden'}
@@ -937,7 +937,7 @@ function CampForm({
                     onChange={(e) => setFormData({ ...formData, waitlistEnabled: e.target.checked })}
                     className="w-4 h-4 rounded"
                   />
-                  <span className="text-gray-300 text-sm">Enable Waitlist</span>
+                  <span className="dark:text-gray-300 light:text-gray-700 text-sm">Enable Waitlist</span>
                 </label>
               </div>
               
@@ -957,7 +957,7 @@ function CampForm({
 
             {/* Sibling Discount Section */}
             <div className="space-y-4">
-              <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+              <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">
                 Sibling Discount
               </h3>
               
@@ -968,11 +968,11 @@ function CampForm({
                   onChange={(e) => setFormData({ ...formData, siblingDiscountEnabled: e.target.checked })}
                   className="w-4 h-4 rounded"
                 />
-                <span className="text-gray-300 text-sm">Enable sibling discount</span>
+                <span className="dark:text-gray-300 light:text-gray-700 text-sm">Enable sibling discount</span>
               </label>
               
               {formData.siblingDiscountEnabled && (
-                <div className="p-3 bg-gray-800/50 rounded border border-gray-700 space-y-3">
+                <div className="p-3 dark:bg-gray-800/50 light:bg-gray-100 rounded border dark:border-gray-700 light:border-gray-300 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="label text-sm">Type</label>
@@ -999,7 +999,7 @@ function CampForm({
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs dark:text-gray-500 light:text-gray-500">
                     Applied to each additional child (2nd, 3rd, etc.)
                   </p>
                 </div>
@@ -1009,22 +1009,22 @@ function CampForm({
 
           {/* Right Column - Pricing Items */}
           <div className="space-y-4">
-            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">
               Pricing Items
             </h3>
 
             {/* Select from existing pricing items */}
             {allPricingItems.length > 0 && (
               <div className="space-y-2">
-                <label className="label text-sm text-gray-400">Select from existing:</label>
-                <div className="space-y-1 max-h-64 overflow-y-auto p-2 bg-gray-800/30 rounded border border-gray-700">
+                <label className="label text-sm dark:text-gray-400 light:text-gray-600">Select from existing:</label>
+                <div className="space-y-1 max-h-64 overflow-y-auto p-2 dark:bg-gray-800/30 light:bg-gray-50 rounded border dark:border-gray-700 light:border-gray-300">
                   {allPricingItems.map((item) => (
                     <label
                       key={item.id}
                       className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all ${
                         selectedItemIds.has(item.id)
                           ? 'border-brand-primary bg-brand-primary/10'
-                          : 'border-gray-700 hover:border-gray-600'
+                          : 'dark:border-gray-700 light:border-gray-300 hover:dark:border-gray-600 light:border-gray-300'
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1035,18 +1035,18 @@ function CampForm({
                           className="w-4 h-4"
                         />
                         <div>
-                          <div className="font-medium text-white text-sm flex items-center gap-1">
+                          <div className="font-medium dark:text-white light:text-gray-900 text-sm flex items-center gap-1">
                             {item.name}
                             {item.isRequired && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-400">Req</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded dark:bg-blue-900/50 light:bg-blue-100 dark:text-blue-400 light:text-blue-700">Req</span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs dark:text-gray-500 light:text-gray-500">
                             {item.itemType}
                           </div>
                         </div>
                       </div>
-                      <span className={`font-bold text-sm ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
+                      <span className={`font-bold text-sm ${item.amount < 0 ? 'text-green-400' : 'dark:text-white light:text-gray-900'}`}>
                         {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(0)}
                       </span>
                     </label>
@@ -1058,20 +1058,20 @@ function CampForm({
             {/* New items created for this camp */}
             {newItems.length > 0 && (
               <div className="space-y-1">
-                <label className="label text-sm text-gray-400">New items:</label>
+                <label className="label text-sm dark:text-gray-400 light:text-gray-600">New items:</label>
                 {newItems.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between p-2 bg-green-900/20 rounded border border-green-700">
                     <div className="flex items-center gap-2">
                       <div>
-                        <div className="font-medium text-white text-sm flex items-center gap-1">
+                        <div className="font-medium dark:text-white light:text-gray-900 text-sm flex items-center gap-1">
                           {item.name}
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/50 text-green-400">New</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700">New</span>
                         </div>
-                        <div className="text-xs text-gray-500">{item.itemType}</div>
+                        <div className="text-xs dark:text-gray-500 light:text-gray-500">{item.itemType}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`font-bold text-sm ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
+                      <span className={`font-bold text-sm ${item.amount < 0 ? 'text-green-400' : 'dark:text-white light:text-gray-900'}`}>
                         AED {Math.abs(item.amount).toFixed(0)}
                       </span>
                       <button
@@ -1088,8 +1088,8 @@ function CampForm({
             )}
 
             {/* Summary */}
-            <div className="flex justify-between items-center py-2 border-t border-gray-700">
-              <span className="text-gray-400 text-sm">
+            <div className="flex justify-between items-center py-2 border-t dark:border-gray-700 light:border-gray-300">
+              <span className="dark:text-gray-400 light:text-gray-600 text-sm">
                 {getSelectedItems().length} item(s) selected
               </span>
               <button
@@ -1103,7 +1103,7 @@ function CampForm({
 
             {/* Add Pricing Form */}
             {showAddPricing && (
-              <div className="p-3 bg-gray-800/50 rounded border border-gray-600 space-y-3">
+              <div className="p-3 dark:bg-gray-800/50 light:bg-gray-100 rounded border dark:border-gray-600 light:border-gray-300 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="label text-sm">Name *</label>
@@ -1147,7 +1147,7 @@ function CampForm({
                     <option value="add_on">Add-on</option>
                     <option value="discount">Discount</option>
                   </select>
-                  <label className="flex items-center gap-1 text-white text-sm">
+                  <label className="flex items-center gap-1 dark:text-white light:text-gray-900 text-sm">
                     <input
                       type="checkbox"
                       checked={newPricing.isRequired}
@@ -1178,7 +1178,7 @@ function CampForm({
         </div>
 
         {/* Submit Buttons - Full Width */}
-        <div className="flex gap-3 pt-6 mt-6 border-t border-gray-700">
+        <div className="flex gap-3 pt-6 mt-6 border-t dark:border-gray-700 light:border-gray-300">
           <button type="submit" className="btn-primary flex-1">
             {isDuplicate ? '📋 Create Duplicate' : camp ? 'Update Camp' : 'Create Camp'}
           </button>
@@ -1281,10 +1281,11 @@ function PricingTab({ token }: { token: string }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h2 className="font-heading text-xl font-bold text-white uppercase">Pricing Items</h2>
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+      {/* Header - stacks on mobile */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase">Pricing Items</h2>
+          <label className="flex items-center gap-2 text-sm dark:text-gray-400 light:text-gray-600 cursor-pointer">
             <input
               type="checkbox"
               checked={showArchived}
@@ -1294,61 +1295,59 @@ function PricingTab({ token }: { token: string }) {
             Show archived
           </label>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
+        <button onClick={() => setShowForm(true)} className="btn-primary text-sm sm:text-base">
           + Create Pricing Item
         </button>
       </div>
 
       <div className="space-y-2">
         {items.map((item) => {
-          // Check if item is assigned to an active camp
           const assignedCamp = item.campId ? camps.find(c => c.id === item.campId) : null
           const isInUse = assignedCamp && assignedCamp.status === 'active'
           
           return (
             <div key={item.id} className={`card ${!item.isActive ? 'opacity-60' : ''}`}>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="font-medium text-white">{item.name}</div>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                {/* Info section */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-medium dark:text-white light:text-gray-900">{item.name}</div>
                     {!item.isActive && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Archived</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-700 dark:text-gray-400 light:text-gray-600">Archived</span>
                     )}
                     {item.isRequired && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400">Required</span>
+                      <span className="text-xs px-2 py-0.5 rounded dark:bg-blue-900/50 light:bg-blue-100 dark:text-blue-400 light:text-blue-700">Required</span>
                     )}
                     {isInUse && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">In Use</span>
+                      <span className="text-xs px-2 py-0.5 rounded dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700">In Use</span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-400 mt-1">{item.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-sm dark:text-gray-400 light:text-gray-600 mt-1">{item.description}</div>
+                  <div className="text-xs dark:text-gray-500 light:text-gray-500 mt-1">
                     Type: {item.itemType} • Order: {item.displayOrder}
-                    {item.campId && ` • Camp: ${assignedCamp?.name || 'Unknown'}`}
-                    {!item.campId && ' • Not assigned'}
+                    {item.campId && ` • ${assignedCamp?.name || 'Unknown'}`}
+                    {!item.campId && ' • Global'}
                   </div>
                 </div>
-                <div className="flex items-start gap-4">
-                  <div className="text-right">
-                    <div className={`text-lg font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
-                      {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
-                    </div>
+                
+                {/* Price and actions */}
+                <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-0 dark:border-gray-700 light:border-gray-200">
+                  <div className={`text-lg font-bold ${item.amount < 0 ? 'text-green-400' : 'dark:text-white light:text-gray-900'}`}>
+                    {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setEditingItem(item)}
-                      className="btn-secondary text-sm py-1 px-3"
+                      className="btn-secondary text-sm py-1.5 px-3"
                     >
                       Edit
                     </button>
                     {isInUse ? (
-                      <span className="text-xs text-gray-500 py-1 px-3" title="Cannot archive while assigned to active camp">
-                        In use
-                      </span>
+                      <span className="text-xs dark:text-gray-500 light:text-gray-500 py-1.5 px-3">In use</span>
                     ) : (
                       <button
                         onClick={() => handleArchive(item.id, item.isActive)}
-                        className={`btn-secondary text-sm py-1 px-3 ${item.isActive ? 'text-red-400 hover:bg-red-900/20' : 'text-green-400 hover:bg-green-900/20'}`}
+                        className={`btn-secondary text-sm py-1.5 px-3 ${item.isActive ? 'text-red-400 hover:bg-red-900/20' : 'text-green-400 hover:bg-green-900/20'}`}
                       >
                         {item.isActive ? 'Archive' : 'Restore'}
                       </button>
@@ -1394,7 +1393,7 @@ function PricingForm({
 
   return (
     <div className="card max-w-2xl">
-      <h2 className="font-heading text-xl font-bold text-white uppercase mb-4">
+      <h2 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
         {item ? 'Edit Pricing Item' : 'Create New Pricing Item'}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -1433,7 +1432,7 @@ function PricingForm({
               required
               placeholder="25.00"
             />
-            <p className="text-xs text-gray-500 mt-1">Use negative for discounts (e.g., -10)</p>
+            <p className="text-xs dark:text-gray-500 light:text-gray-500 mt-1">Use negative for discounts (e.g., -10)</p>
           </div>
 
           <div>
@@ -1478,7 +1477,7 @@ function PricingForm({
         </div>
 
         <div className="flex items-center gap-6">
-          <label className="flex items-center gap-2 text-white">
+          <label className="flex items-center gap-2 dark:text-white light:text-gray-900">
             <input
               type="checkbox"
               checked={formData.isRequired}
@@ -1487,7 +1486,7 @@ function PricingForm({
             <span className="text-sm">Required (auto-selected)</span>
           </label>
 
-          <label className="flex items-center gap-2 text-white">
+          <label className="flex items-center gap-2 dark:text-white light:text-gray-900">
             <input
               type="checkbox"
               checked={formData.isActive}
@@ -1579,15 +1578,15 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
   const getPaymentBadge = (status: string | null | undefined) => {
     switch (status) {
       case 'paid':
-        return 'bg-green-900/50 text-green-400'
+        return 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700'
       case 'free':
-        return 'bg-blue-900/50 text-blue-400'
+        return 'dark:bg-blue-900/50 light:bg-blue-100 dark:text-blue-400 light:text-blue-700'
       case 'pending':
       case null:
       case undefined:
       case '':
       default:
-        return 'bg-yellow-900/50 text-yellow-400'
+        return 'dark:bg-yellow-900/50 light:bg-yellow-100 dark:text-yellow-400 light:text-yellow-700'
     }
   }
   
@@ -1598,18 +1597,18 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
 
   const getStatusBadge = (status: string | null | undefined) => {
     switch (status) {
-      case 'confirmed': return 'bg-green-900/50 text-green-400'
-      case 'pending': return 'bg-yellow-900/50 text-yellow-400'
-      case 'waitlist': return 'bg-purple-900/50 text-purple-400'
-      case 'cancelled': return 'bg-red-900/50 text-red-400'
-      case 'attended': return 'bg-blue-900/50 text-blue-400'
-      case 'no-show': return 'bg-gray-700/50 text-gray-400'
-      default: return 'bg-green-900/50 text-green-400'
+      case 'confirmed': return 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700'
+      case 'pending': return 'dark:bg-yellow-900/50 light:bg-yellow-100 dark:text-yellow-400 light:text-yellow-700'
+      case 'waitlist': return 'dark:bg-purple-900/50 light:bg-purple-100 dark:text-purple-400 light:text-purple-700'
+      case 'cancelled': return 'dark:bg-red-900/50 light:bg-red-100 dark:text-red-400 light:text-red-700'
+      case 'attended': return 'dark:bg-blue-900/50 light:bg-blue-100 dark:text-blue-400 light:text-blue-700'
+      case 'no-show': return 'dark:bg-gray-700/50 light:bg-gray-200 dark:text-gray-400 light:text-gray-600'
+      default: return 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700'
     }
   }
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-8">Loading registrations...</div>
+    return <div className="text-center dark:text-gray-400 light:text-gray-600 py-8">Loading registrations...</div>
   }
 
   // Detail View
@@ -1636,7 +1635,7 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
     <div>
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-heading text-xl font-bold text-white uppercase">
+        <h2 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase">
           Registrations ({stats.total})
         </h2>
       </div>
@@ -1660,7 +1659,7 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer mt-2">
+          <label className="flex items-center gap-2 text-xs dark:text-gray-400 light:text-gray-600 cursor-pointer mt-2">
             <input
               type="checkbox"
               checked={showArchivedCamps}
@@ -1684,26 +1683,26 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="card text-center py-3">
-          <div className="text-2xl font-bold text-white">{stats.total}</div>
-          <div className="text-xs text-gray-500 uppercase">Total</div>
+          <div className="text-2xl font-bold dark:text-white light:text-gray-900">{stats.total}</div>
+          <div className="text-xs dark:text-gray-500 light:text-gray-500 uppercase">Total</div>
         </div>
         <div className="card text-center py-3">
           <div className="text-2xl font-bold text-green-400">{stats.paid}</div>
-          <div className="text-xs text-gray-500 uppercase">Paid/Free</div>
+          <div className="text-xs dark:text-gray-500 light:text-gray-500 uppercase">Paid/Free</div>
         </div>
         <div className="card text-center py-3">
           <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
-          <div className="text-xs text-gray-500 uppercase">Pending</div>
+          <div className="text-xs dark:text-gray-500 light:text-gray-500 uppercase">Pending</div>
         </div>
         <div className="card text-center py-3">
           <div className="text-2xl font-bold text-brand-primary">AED {stats.revenue.toFixed(0)}</div>
-          <div className="text-xs text-gray-500 uppercase">Revenue</div>
+          <div className="text-xs dark:text-gray-500 light:text-gray-500 uppercase">Revenue</div>
         </div>
       </div>
       
       {/* Registrations List */}
       {filteredRegistrations.length === 0 ? (
-        <div className="card text-center text-gray-400 py-8">
+        <div className="card text-center dark:text-gray-400 light:text-gray-600 py-8">
           {searchQuery ? 'No registrations match your search' : 'No registrations yet'}
         </div>
       ) : (
@@ -1717,7 +1716,7 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
                 <div className="flex justify-between items-center">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="font-medium text-white">{reg.child_full_name || 'Unknown'}</div>
+                    <div className="font-medium dark:text-white light:text-gray-900">{reg.child_full_name || 'Unknown'}</div>
                     <span className={`text-xs px-2 py-0.5 rounded ${getStatusBadge(reg.registration_status)}`}>
                       {reg.registration_status || 'confirmed'}
                     </span>
@@ -1727,19 +1726,19 @@ function RegistrationsTab({ token, selectedCampId, onClearFilter }: { token: str
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-400 mt-1">
+                  <div className="text-sm dark:text-gray-400 light:text-gray-600 mt-1">
                     {reg.parent_full_name} • {reg.email} • {reg.phone}
                   </div>
-                  <div className="flex gap-4 text-xs text-gray-500 mt-1">
+                  <div className="flex gap-4 text-xs dark:text-gray-500 light:text-gray-500 mt-1">
                     <span>{getCampName(reg.camp_id)}</span>
                     <span>{formatDate(reg.created_at)}</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-bold dark:text-white light:text-gray-900">
                     AED {(reg.total_amount || 0).toFixed(2)}
                   </div>
-                  <div className="text-xs text-gray-500">Click to view →</div>
+                  <div className="text-xs dark:text-gray-500 light:text-gray-500">Click to view →</div>
                 </div>
               </div>
             </div>
@@ -1783,21 +1782,21 @@ function RegistrationDetail({
 
   const getPaymentBadge = (status: string | null | undefined) => {
     switch (status) {
-      case 'paid': return 'bg-green-900/50 text-green-400'
-      case 'free': return 'bg-blue-900/50 text-blue-400'
-      default: return 'bg-yellow-900/50 text-yellow-400'
+      case 'paid': return 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700'
+      case 'free': return 'dark:bg-blue-900/50 light:bg-blue-100 dark:text-blue-400 light:text-blue-700'
+      default: return 'dark:bg-yellow-900/50 light:bg-yellow-100 dark:text-yellow-400 light:text-yellow-700'
     }
   }
 
   const getStatusBadge = (status: string | null | undefined) => {
     switch (status) {
-      case 'confirmed': return 'bg-green-900/50 text-green-400'
-      case 'pending': return 'bg-yellow-900/50 text-yellow-400'
-      case 'waitlist': return 'bg-purple-900/50 text-purple-400'
-      case 'cancelled': return 'bg-red-900/50 text-red-400'
-      case 'attended': return 'bg-blue-900/50 text-blue-400'
-      case 'no-show': return 'bg-gray-700/50 text-gray-400'
-      default: return 'bg-green-900/50 text-green-400'
+      case 'confirmed': return 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700'
+      case 'pending': return 'dark:bg-yellow-900/50 light:bg-yellow-100 dark:text-yellow-400 light:text-yellow-700'
+      case 'waitlist': return 'dark:bg-purple-900/50 light:bg-purple-100 dark:text-purple-400 light:text-purple-700'
+      case 'cancelled': return 'dark:bg-red-900/50 light:bg-red-100 dark:text-red-400 light:text-red-700'
+      case 'attended': return 'dark:bg-blue-900/50 light:bg-blue-100 dark:text-blue-400 light:text-blue-700'
+      case 'no-show': return 'dark:bg-gray-700/50 light:bg-gray-200 dark:text-gray-400 light:text-gray-600'
+      default: return 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700'
     }
   }
 
@@ -1865,7 +1864,7 @@ function RegistrationDetail({
 
   // Clickable phone link
   const PhoneLink = ({ phone, className = '' }: { phone: string | null; className?: string }) => {
-    if (!phone) return <span className="text-gray-500">-</span>
+    if (!phone) return <span className="dark:text-gray-500 light:text-gray-500">-</span>
     return (
       <a href={`tel:${phone}`} className={`text-brand-primary hover:underline ${className}`}>
         📞 {phone}
@@ -1875,7 +1874,7 @@ function RegistrationDetail({
 
   // Clickable email link
   const EmailLink = ({ email, className = '' }: { email: string | null; className?: string }) => {
-    if (!email) return <span className="text-gray-500">-</span>
+    if (!email) return <span className="dark:text-gray-500 light:text-gray-500">-</span>
     return (
       <a href={`mailto:${email}`} className={`text-brand-primary hover:underline ${className}`}>
         ✉️ {email}
@@ -1895,18 +1894,18 @@ function RegistrationDetail({
             onChange={(e) => updateField(field, e.target.checked ? 1 : 0)}
             className="w-4 h-4"
           />
-          <span className="text-gray-300 text-sm">{label}</span>
+          <span className="dark:text-gray-300 light:text-gray-700 text-sm">{label}</span>
         </label>
       )
     }
     return (
       <div className="flex items-center gap-2">
         <span className={`w-5 h-5 rounded flex items-center justify-center text-xs ${
-          value === 1 || value === true ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+          value === 1 || value === true ? 'dark:bg-green-900/50 light:bg-green-100 dark:text-green-400 light:text-green-700' : 'dark:bg-red-900/50 light:bg-red-100 dark:text-red-400 light:text-red-700'
         }`}>
           {value === 1 || value === true ? '✓' : '✗'}
         </span>
-        <span className="text-gray-300 text-sm">{label}</span>
+        <span className="dark:text-gray-300 light:text-gray-700 text-sm">{label}</span>
       </div>
     )
   }
@@ -1918,7 +1917,7 @@ function RegistrationDetail({
       if (options) {
         return (
           <div>
-            <span className="text-gray-500">{label}:</span>
+            <span className="dark:text-gray-500 light:text-gray-500">{label}:</span>
             <select
               value={value}
               onChange={(e) => updateField(field, e.target.value)}
@@ -1932,7 +1931,7 @@ function RegistrationDetail({
       if (type === 'textarea') {
         return (
           <div>
-            <span className="text-gray-500 block mb-1">{label}:</span>
+            <span className="dark:text-gray-500 light:text-gray-500 block mb-1">{label}:</span>
             <textarea
               value={value}
               onChange={(e) => updateField(field, e.target.value)}
@@ -1944,7 +1943,7 @@ function RegistrationDetail({
       }
       return (
         <div>
-          <span className="text-gray-500">{label}:</span>
+          <span className="dark:text-gray-500 light:text-gray-500">{label}:</span>
           <input
             type={type}
             value={value}
@@ -1957,41 +1956,42 @@ function RegistrationDetail({
     
     // Display mode with special handling for phone/email
     if (field === 'email') {
-      return <div><span className="text-gray-500">{label}:</span> <EmailLink email={value} className="ml-2" /></div>
+      return <div><span className="dark:text-gray-500 light:text-gray-500">{label}:</span> <EmailLink email={value} className="ml-2" /></div>
     }
     if (field === 'phone' || field.includes('phone')) {
-      return <div><span className="text-gray-500">{label}:</span> <PhoneLink phone={value} className="ml-2" /></div>
+      return <div><span className="dark:text-gray-500 light:text-gray-500">{label}:</span> <PhoneLink phone={value} className="ml-2" /></div>
     }
-    return <div><span className="text-gray-500">{label}:</span> <span className="text-white ml-2">{value || '-'}</span></div>
+    return <div><span className="dark:text-gray-500 light:text-gray-500">{label}:</span> <span className="dark:text-white light:text-gray-900 ml-2">{value || '-'}</span></div>
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={onBack} className="text-brand-primary hover:underline flex items-center gap-2">
+      {/* Action Bar - Stacks on mobile */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+        <button onClick={onBack} className="text-brand-primary hover:underline flex items-center gap-2 text-sm">
           ← Back to Registrations
         </button>
         <div className="flex gap-2">
           {isEditing ? (
             <>
-              <button onClick={() => { setFormData(registration); setIsEditing(false) }} className="btn-secondary text-sm">
+              <button onClick={() => { setFormData(registration); setIsEditing(false) }} className="btn-secondary text-sm py-2 px-4">
                 Cancel
               </button>
-              <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">
-                {saving ? 'Saving...' : 'Save Changes'}
+              <button onClick={handleSave} disabled={saving} className="btn-primary text-sm py-2 px-4 flex-1 sm:flex-none">
+                {saving ? 'Saving...' : 'Save'}
               </button>
             </>
           ) : (
             <>
-              <button onClick={() => setIsEditing(true)} className="btn-primary text-sm">
-                ✏️ Edit Registration
+              <button onClick={() => setIsEditing(true)} className="btn-primary text-sm py-2 px-4 flex-1 sm:flex-none">
+                ✏️ Edit
               </button>
               <button 
                 onClick={handleDelete} 
                 disabled={deleting}
-                className="btn-secondary text-sm text-red-400 hover:bg-red-900/20"
+                className="btn-secondary text-sm py-2 px-4 text-red-400 hover:bg-red-900/20"
               >
-                {deleting ? 'Deleting...' : '🗑️ Delete'}
+                {deleting ? '...' : '🗑️'}
               </button>
             </>
           )}
@@ -1999,98 +1999,90 @@ function RegistrationDetail({
       </div>
       
       <div className="card">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-700">
+        {/* Header - Stacks on mobile */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6 pb-4 border-b dark:border-gray-700 light:border-gray-300">
           <div>
-            <h2 className="font-heading text-2xl font-bold text-white">{formData.child_full_name || 'Unknown'}</h2>
-            <p className="text-gray-400">{getCampName(formData.camp_id)}</p>
-            <p className="text-gray-500 text-sm mt-1">Registered: {formatDate(formData.created_at)}</p>
+            <h2 className="font-heading text-xl sm:text-2xl font-bold dark:text-white light:text-gray-900">{formData.child_full_name || 'Unknown'}</h2>
+            <p className="dark:text-gray-400 light:text-gray-600 text-sm">{getCampName(formData.camp_id)}</p>
+            <p className="dark:text-gray-500 light:text-gray-500 text-xs mt-1">Registered: {formatDate(formData.created_at)}</p>
           </div>
-          <div className="text-right space-y-2">
-            <div className="text-2xl font-bold text-white">AED {(formData.total_amount || 0).toFixed(2)}</div>
-            <div className="flex gap-3 justify-end items-center flex-wrap text-sm">
-              {/* Registration Status */}
-              <div className="flex items-center gap-1">
-                <span className="text-gray-500">Status:</span>
-                <select
-                  value={formData.registration_status || 'confirmed'}
-                  onChange={async (e) => {
-                    const newStatus = e.target.value
-                    const updatedData = { ...formData, registration_status: newStatus }
-                    updateField('registration_status', newStatus)
-                    try {
-                      await fetch(`/api/registrations/${registration.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify(updatedData),
-                      })
-                      onUpdate(updatedData)
-                    } catch (err) {
-                      console.error('Failed to update status:', err)
-                    }
-                  }}
-                  className={`px-2 py-1 rounded border-0 cursor-pointer ${getStatusBadge(formData.registration_status)}`}
-                >
-                  <option value="confirmed">confirmed</option>
-                  <option value="pending">pending</option>
-                  <option value="waitlist">waitlist</option>
-                  <option value="cancelled">cancelled</option>
-                  <option value="attended">attended</option>
-                  <option value="no-show">no-show</option>
-                </select>
-              </div>
-              {/* Payment Status */}
-              <div className="flex items-center gap-1">
-                <span className="text-gray-500">Payment:</span>
-                <select
-                  value={formData.payment_status || 'pending'}
-                  onChange={async (e) => {
-                    const newStatus = e.target.value
-                    const updatedData = { ...formData, payment_status: newStatus }
-                    updateField('payment_status', newStatus)
-                    try {
-                      await fetch(`/api/registrations/${registration.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify(updatedData),
-                      })
-                      onUpdate(updatedData)
-                    } catch (err) {
-                      console.error('Failed to update payment status:', err)
-                    }
-                  }}
-                  className={`px-2 py-1 rounded border-0 cursor-pointer ${getPaymentBadge(formData.payment_status)}`}
-                >
-                  <option value="pending">pending</option>
-                  <option value="paid">paid</option>
-                  <option value="free">free</option>
-                </select>
-              </div>
+          <div className="flex flex-wrap items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
+            <div className="text-xl sm:text-2xl font-bold dark:text-white light:text-gray-900">AED {(formData.total_amount || 0).toFixed(2)}</div>
+            <div className="flex gap-2 items-center text-sm">
+              <select
+                value={formData.registration_status || 'confirmed'}
+                onChange={async (e) => {
+                  const newStatus = e.target.value
+                  const updatedData = { ...formData, registration_status: newStatus }
+                  updateField('registration_status', newStatus)
+                  try {
+                    await fetch(`/api/registrations/${registration.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                      body: JSON.stringify(updatedData),
+                    })
+                    onUpdate(updatedData)
+                  } catch (err) {
+                    console.error('Failed to update status:', err)
+                  }
+                }}
+                className={`px-2 py-1 rounded border-0 cursor-pointer text-xs ${getStatusBadge(formData.registration_status)}`}
+              >
+                <option value="confirmed">confirmed</option>
+                <option value="pending">pending</option>
+                <option value="waitlist">waitlist</option>
+                <option value="cancelled">cancelled</option>
+                <option value="attended">attended</option>
+                <option value="no-show">no-show</option>
+              </select>
+              <select
+                value={formData.payment_status || 'pending'}
+                onChange={async (e) => {
+                  const newStatus = e.target.value
+                  const updatedData = { ...formData, payment_status: newStatus }
+                  updateField('payment_status', newStatus)
+                  try {
+                    await fetch(`/api/registrations/${registration.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                      body: JSON.stringify(updatedData),
+                    })
+                    onUpdate(updatedData)
+                  } catch (err) {
+                    console.error('Failed to update payment status:', err)
+                  }
+                }}
+                className={`px-2 py-1 rounded border-0 cursor-pointer text-xs ${getPaymentBadge(formData.payment_status)}`}
+              >
+                <option value="pending">pending</option>
+                <option value="paid">paid</option>
+                <option value="free">free</option>
+              </select>
             </div>
           </div>
         </div>
 
-        {/* Quick Contact Actions */}
+        {/* Quick Contact Actions - Grid on mobile */}
         {!isEditing && (formData.email || formData.phone) && (
-          <div className="flex gap-3 mb-6 p-3 bg-gray-800/50 rounded">
+          <div className="grid grid-cols-2 sm:flex gap-2 mb-6">
             {formData.email && (
-              <a href={`mailto:${formData.email}`} className="btn-secondary text-sm flex items-center gap-2">
-                ✉️ Email Parent
+              <a href={`mailto:${formData.email}`} className="btn-secondary text-sm py-2 px-3 flex items-center justify-center gap-2">
+                ✉️ <span className="hidden sm:inline">Email</span>
               </a>
             )}
             {formData.phone && (
-              <a href={`tel:${formData.phone}`} className="btn-secondary text-sm flex items-center gap-2">
-                📞 Call Parent
+              <a href={`tel:${formData.phone}`} className="btn-secondary text-sm py-2 px-3 flex items-center justify-center gap-2">
+                📞 <span className="hidden sm:inline">Call</span>
               </a>
             )}
             {formData.emergency1_phone && (
-              <a href={`tel:${formData.emergency1_phone}`} className="btn-secondary text-sm flex items-center gap-2">
-                🚨 Emergency 1
+              <a href={`tel:${formData.emergency1_phone}`} className="btn-secondary text-sm py-2 px-3 flex items-center justify-center gap-2 text-red-400">
+                🚨 <span className="hidden sm:inline">Emergency 1</span><span className="sm:hidden">Em. 1</span>
               </a>
             )}
             {formData.emergency2_phone && (
-              <a href={`tel:${formData.emergency2_phone}`} className="btn-secondary text-sm flex items-center gap-2">
-                🚨 Emergency 2
+              <a href={`tel:${formData.emergency2_phone}`} className="btn-secondary text-sm py-2 px-3 flex items-center justify-center gap-2 text-red-400">
+                🚨 <span className="hidden sm:inline">Emergency 2</span><span className="sm:hidden">Em. 2</span>
               </a>
             )}
           </div>
@@ -2099,7 +2091,7 @@ function RegistrationDetail({
         <div className="grid md:grid-cols-2 gap-6">
           {/* Child Info */}
           <div className="space-y-3">
-            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Child Information</h3>
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Child Information</h3>
             <Field label="Full Name" field="child_full_name" />
             <Field label="Date of Birth" field="child_dob" type="date" />
             <Field label="Can Walk Home Alone" field="walk_home_alone" options={['yes', 'no']} />
@@ -2107,7 +2099,7 @@ function RegistrationDetail({
 
           {/* Parent Info */}
           <div className="space-y-3">
-            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Parent/Guardian</h3>
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Parent/Guardian</h3>
             <Field label="Full Name" field="parent_full_name" />
             <Field label="Email" field="email" type="email" />
             <Field label="Phone" field="phone" type="tel" />
@@ -2116,7 +2108,7 @@ function RegistrationDetail({
 
           {/* Emergency Contact 1 */}
           <div className="space-y-3">
-            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Emergency Contact 1</h3>
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Emergency Contact 1</h3>
             <Field label="Name" field="emergency1_name" />
             <Field label="Phone" field="emergency1_phone" type="tel" />
             <Field label="Relationship" field="emergency1_relationship" />
@@ -2124,7 +2116,7 @@ function RegistrationDetail({
 
           {/* Emergency Contact 2 */}
           <div className="space-y-3">
-            <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Emergency Contact 2</h3>
+            <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Emergency Contact 2</h3>
             <Field label="Name" field="emergency2_name" />
             <Field label="Phone" field="emergency2_phone" type="tel" />
             <Field label="Relationship" field="emergency2_relationship" />
@@ -2133,7 +2125,7 @@ function RegistrationDetail({
 
         {/* Medical & Health Information */}
         <div className="mt-6 space-y-3">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Medical & Health Information</h3>
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Medical & Health Information</h3>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Field label="Medical Conditions" field="has_medical_conditions" options={['no', 'yes']} />
@@ -2170,7 +2162,7 @@ function RegistrationDetail({
 
         {/* Authorised Collectors */}
         <div className="mt-6 space-y-3">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Authorised Collectors</h3>
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Authorised Collectors</h3>
           {isEditing ? (
             <textarea
               value={formData.authorised_collectors || ''}
@@ -2180,7 +2172,7 @@ function RegistrationDetail({
               placeholder="One person per line"
             />
           ) : (
-            <div className="text-white bg-gray-800/50 p-3 rounded whitespace-pre-line">
+            <div className="dark:text-white light:text-gray-900 dark:bg-gray-800/50 light:bg-gray-100 p-3 rounded whitespace-pre-line">
               {formData.authorised_collectors || 'None specified'}
             </div>
           )}
@@ -2196,7 +2188,7 @@ function RegistrationDetail({
 
         {/* Permissions & Consent */}
         <div className="mt-6 space-y-3">
-          <h3 className="font-heading text-lg text-brand-primary uppercase border-b border-gray-700 pb-2">Permissions & Consent</h3>
+          <h3 className="font-heading text-lg text-brand-primary uppercase border-b dark:border-gray-700 light:border-gray-300 pb-2">Permissions & Consent</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <PermissionItem label="Photos/Videos" field="permission_photos" />
             <PermissionItem label="Emergency Medical Treatment" field="permission_health" />
@@ -2211,7 +2203,7 @@ function RegistrationDetail({
         </div>
 
         {/* Registration Meta */}
-        <div className="mt-6 pt-4 border-t border-gray-700 flex flex-wrap justify-between gap-4 text-sm text-gray-500">
+        <div className="mt-6 pt-4 border-t dark:border-gray-700 light:border-gray-300 flex flex-wrap justify-between gap-4 text-sm dark:text-gray-500 light:text-gray-500">
           <span>Registration ID: {formData.id}</span>
           <span>Camp ID: {formData.camp_id}</span>
           {formData.payment_reference && <span>Payment Ref: {formData.payment_reference}</span>}
@@ -2338,7 +2330,7 @@ function AdminNotesSection({
   return (
     <div className="mt-6 space-y-3">
       <h3 className="font-heading text-lg text-yellow-500 uppercase border-b border-yellow-700 pb-2">
-        📝 Admin Notes <span className="text-xs text-gray-500 normal-case font-normal">(internal only - {notes.length} notes)</span>
+        📝 Admin Notes <span className="text-xs dark:text-gray-500 light:text-gray-500 normal-case font-normal">(internal only - {notes.length} notes)</span>
       </h3>
       
       {/* Add new note */}
@@ -2363,7 +2355,7 @@ function AdminNotesSection({
           {saving ? '...' : '+ Add'}
         </button>
       </div>
-      <p className="text-xs text-gray-500">Press ⌘+Enter to add quickly</p>
+      <p className="text-xs dark:text-gray-500 light:text-gray-500">Press ⌘+Enter to add quickly</p>
       
       {/* Notes history */}
       {notes.length > 0 && (
@@ -2373,10 +2365,10 @@ function AdminNotesSection({
             return (
               <div key={index} className="bg-yellow-900/10 border border-yellow-700/30 rounded p-3 group">
                 <div className="flex justify-between items-start gap-2">
-                  <p className="text-white whitespace-pre-wrap flex-1">{note.text}</p>
+                  <p className="dark:text-white light:text-gray-900 whitespace-pre-wrap flex-1">{note.text}</p>
                   <button
                     onClick={() => handleDeleteNote(index)}
-                    className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
+                    className="dark:text-gray-500 light:text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
                     title="Delete note"
                   >
                     ✕

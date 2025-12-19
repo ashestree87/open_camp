@@ -2,35 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Base styles */
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #111111;
-  color: #ffffff;
   min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Oswald', sans-serif;
 }
 
+/* Dark theme (default) */
+.dark body,
+html.dark {
+  background-color: #111111;
+  color: #ffffff;
+}
+
+/* Light theme */
+.light body,
+html.light {
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
 @layer components {
+  /* Primary button */
   .btn-primary {
     @apply bg-brand-primary hover:bg-brand-dark text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 font-heading uppercase tracking-wide;
   }
   
+  /* Secondary button - theme aware */
   .btn-secondary {
-    @apply bg-brand-gray hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg border border-gray-600 transition-colors duration-200;
+    @apply font-semibold py-3 px-6 rounded-lg border transition-colors duration-200;
+  }
+  .dark .btn-secondary {
+    @apply bg-brand-gray hover:bg-gray-700 text-white border-gray-600;
+  }
+  .light .btn-secondary {
+    @apply bg-white hover:bg-gray-100 text-gray-700 border-gray-300;
   }
   
+  /* Input field - theme aware */
   .input-field {
-    @apply w-full px-4 py-3 bg-brand-gray border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary;
+    @apply w-full px-4 py-3 rounded-lg focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-colors duration-200;
+  }
+  .dark .input-field {
+    @apply bg-brand-gray border border-gray-600 text-white placeholder-gray-400;
+  }
+  .light .input-field {
+    @apply bg-white border border-gray-300 text-gray-900 placeholder-gray-500;
   }
   
+  /* Label - theme aware */
   .label {
-    @apply block text-sm font-medium text-gray-300 mb-2;
+    @apply block text-sm font-medium mb-2;
+  }
+  .dark .label {
+    @apply text-gray-300;
+  }
+  .light .label {
+    @apply text-gray-700;
   }
   
+  /* Card - theme aware */
   .card {
-    @apply bg-brand-gray rounded-xl p-6 border border-gray-700;
+    @apply rounded-xl p-6 border transition-colors duration-200;
+  }
+  .dark .card {
+    @apply bg-brand-gray border-gray-700;
+  }
+  .light .card {
+    @apply bg-white border-gray-200 shadow-sm;
+  }
+
+  /* Theme toggle button */
+  .theme-toggle {
+    @apply p-2 rounded-lg transition-colors duration-200;
+  }
+  .dark .theme-toggle {
+    @apply hover:bg-gray-800 text-gray-400 hover:text-white;
+  }
+  .light .theme-toggle {
+    @apply hover:bg-gray-100 text-gray-600 hover:text-gray-900;
   }
 }

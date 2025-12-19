@@ -396,7 +396,7 @@ export default function RegistrationFormEnhanced() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-white text-xl">Loading camps...</div>
+        <div className="dark:text-white light:text-gray-900 text-xl">Loading camps...</div>
       </div>
     )
   }
@@ -405,14 +405,14 @@ export default function RegistrationFormEnhanced() {
     return (
       <div className="card max-w-2xl mx-auto text-center">
         <div className="text-6xl mb-4">✅</div>
-        <h2 className="font-heading text-3xl font-bold text-white uppercase mb-4">
+        <h2 className="font-heading text-3xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
           Registration Complete!
         </h2>
-        <p className="text-gray-300 mb-4">
+        <p className="dark:text-gray-300 light:text-gray-700 mb-4">
           Thank you for registering {fields.length} {fields.length === 1 ? 'child' : 'children'}! 
           A confirmation email has been sent.
         </p>
-        <p className="text-gray-400 text-sm">
+        <p className="dark:text-gray-400 light:text-gray-600 text-sm">
           Payment confirmation: AED {totalAmount.toFixed(2)} paid
         </p>
       </div>
@@ -477,18 +477,18 @@ export default function RegistrationFormEnhanced() {
     return (
       <div className="card max-w-2xl mx-auto text-center">
         <div className="text-6xl mb-4">{icon}</div>
-        <h2 className="font-heading text-2xl font-bold text-white uppercase mb-4">
+        <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
           {title}
         </h2>
         {camp && (
-          <div className="mb-4 p-4 bg-gray-800/50 rounded border border-gray-700">
+          <div className="mb-4 p-4 dark:bg-gray-800/50 light:bg-gray-100 rounded border dark:border-gray-700 light:border-gray-300">
             <h3 className="font-heading text-lg text-brand-primary mb-1">{camp.name}</h3>
-            <p className="text-gray-500 text-sm">
+            <p className="dark:text-gray-500 light:text-gray-500 text-sm">
               📅 {camp.startDate} - {camp.endDate}
             </p>
           </div>
         )}
-        <p className="text-gray-400 mb-6">
+        <p className="dark:text-gray-400 light:text-gray-600 mb-6">
           {message}
         </p>
         <Link to="/" className="btn-primary inline-block">
@@ -501,10 +501,10 @@ export default function RegistrationFormEnhanced() {
   if (camps.length === 0) {
     return (
       <div className="card max-w-2xl mx-auto text-center">
-        <h2 className="font-heading text-2xl font-bold text-white uppercase mb-4">
+        <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
           No Active Camps
         </h2>
-        <p className="text-gray-400">
+        <p className="dark:text-gray-400 light:text-gray-600">
           There are currently no camps available for registration.
         </p>
       </div>
@@ -521,7 +521,7 @@ export default function RegistrationFormEnhanced() {
       {/* Camp Selection */}
       {!campId && (
         <div className="card mb-6">
-          <h2 className="font-heading text-2xl font-bold text-white uppercase mb-4">
+          <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
             Select a Camp
           </h2>
           <div className="space-y-3">
@@ -536,10 +536,10 @@ export default function RegistrationFormEnhanced() {
                 <Link
                   key={camp.id}
                   to={`/camp/${camp.id}`}
-                  className="block w-full text-left p-4 rounded border-2 transition-all border-gray-700 hover:border-brand-primary/50"
+                  className="block w-full text-left p-4 rounded border-2 transition-all dark:border-gray-700 light:border-gray-300 hover:border-brand-primary/50"
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-heading text-lg font-bold text-white">{camp.name}</h3>
+                    <h3 className="font-heading text-lg font-bold dark:text-white light:text-gray-900">{camp.name}</h3>
                     <div className="flex flex-col items-end gap-1">
                       {isFull && camp.waitlistEnabled ? (
                         <span className="text-yellow-400 text-sm font-bold">📋 WAITLIST</span>
@@ -548,8 +548,8 @@ export default function RegistrationFormEnhanced() {
                       )}
                     </div>
                   </div>
-                  <p className="text-gray-400 text-sm mb-2">{camp.description}</p>
-                  <div className="flex gap-4 text-xs text-gray-500">
+                  <p className="dark:text-gray-400 light:text-gray-600 text-sm mb-2">{camp.description}</p>
+                  <div className="flex gap-4 text-xs dark:text-gray-500 light:text-gray-500">
                     <span>📅 {camp.startDate} - {camp.endDate}</span>
                     <span>👥 Ages {camp.ageMin}-{camp.ageMax}</span>
                   </div>
@@ -565,9 +565,9 @@ export default function RegistrationFormEnhanced() {
         <div className="card mb-6 bg-brand-primary/10 border-brand-primary">
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="font-heading text-2xl font-bold text-white mb-2">{selectedCamp.name}</h2>
-              <p className="text-gray-300 text-sm mb-2">{selectedCamp.description}</p>
-              <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+              <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 mb-2">{selectedCamp.name}</h2>
+              <p className="dark:text-gray-300 light:text-gray-700 text-sm mb-2">{selectedCamp.description}</p>
+              <div className="flex flex-wrap gap-4 text-sm dark:text-gray-400 light:text-gray-600">
                 <span>📅 {selectedCamp.startDate} - {selectedCamp.endDate}</span>
                 <span>👥 Ages {selectedCamp.ageMin}-{selectedCamp.ageMax}</span>
                 {selectedCamp.registrationStatus === 'open' && (
@@ -575,7 +575,7 @@ export default function RegistrationFormEnhanced() {
                 )}
               </div>
               {selectedCamp.siblingDiscountEnabled && selectedCamp.registrationStatus === 'open' && (
-                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-400">
+                <div className="mt-3 flex items-center gap-2 px-4 py-2 dark:bg-green-900/30 light:bg-green-50 border dark:border-green-700 light:border-green-300 rounded-lg text-sm dark:text-green-400 light:text-green-700">
                   🎉 Sibling discount available: 
                   {selectedCamp.siblingDiscountType === 'percentage' 
                     ? ` ${selectedCamp.siblingDiscountAmount}% off`
@@ -586,33 +586,33 @@ export default function RegistrationFormEnhanced() {
               
               {/* Registration Status Messages */}
               {selectedCamp.registrationStatus === 'paused' && (
-                <div className="mt-4 p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
-                  <div className="flex items-center gap-2 text-yellow-400 font-bold mb-1">
+                <div className="mt-4 p-4 dark:bg-yellow-900/30 light:bg-yellow-50 border dark:border-yellow-700 light:border-yellow-300 rounded-lg">
+                  <div className="flex items-center gap-2 dark:text-yellow-400 light:text-yellow-700 font-bold mb-1">
                     ⏸️ Registration Paused
                   </div>
-                  <p className="text-yellow-200/80 text-sm">
+                  <p className="dark:text-yellow-200/80 light:text-yellow-600 text-sm">
                     Registration for this camp is temporarily paused. Please check back later or contact us for more information.
                   </p>
                 </div>
               )}
               
               {selectedCamp.registrationStatus === 'closed' && (
-                <div className="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg">
-                  <div className="flex items-center gap-2 text-red-400 font-bold mb-1">
+                <div className="mt-4 p-4 dark:bg-red-900/30 light:bg-red-50 border dark:border-red-700 light:border-red-300 rounded-lg">
+                  <div className="flex items-center gap-2 dark:text-red-400 light:text-red-700 font-bold mb-1">
                     🔒 Registration Closed
                   </div>
-                  <p className="text-red-200/80 text-sm">
+                  <p className="dark:text-red-200/80 light:text-red-600 text-sm">
                     Registration for this camp is now closed.
                   </p>
                 </div>
               )}
               
               {selectedCamp.registrationStatus === 'open' && selectedCamp.maxSpots - selectedCamp.spotsTaken <= 0 && selectedCamp.waitlistEnabled && (
-                <div className="mt-4 p-4 bg-purple-900/30 border border-purple-700 rounded-lg">
-                  <div className="flex items-center gap-2 text-purple-400 font-bold mb-1">
+                <div className="mt-4 p-4 dark:bg-purple-900/30 light:bg-purple-50 border dark:border-purple-700 light:border-purple-300 rounded-lg">
+                  <div className="flex items-center gap-2 dark:text-purple-400 light:text-purple-700 font-bold mb-1">
                     📋 Join Waitlist
                   </div>
-                  <p className="text-purple-200/80 text-sm">
+                  <p className="dark:text-purple-200/80 light:text-purple-600 text-sm">
                     This camp is currently full, but you can join the waitlist. {selectedCamp.waitlistMessage || "We'll contact you if a spot opens up."}
                   </p>
                 </div>
@@ -631,7 +631,7 @@ export default function RegistrationFormEnhanced() {
           {/* Children Section */}
           <div className="card">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-heading text-2xl font-bold text-white uppercase">
+              <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 uppercase">
                 Children ({fields.length})
               </h2>
               <button
@@ -658,7 +658,7 @@ export default function RegistrationFormEnhanced() {
 
           {/* Parent/Guardian Information */}
           <div className="card space-y-4">
-            <h3 className="font-heading text-xl font-bold text-white uppercase">Parent/Guardian</h3>
+            <h3 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase">Parent/Guardian</h3>
             
             <div className="grid md:grid-cols-2 gap-4">
               <div>
@@ -688,38 +688,46 @@ export default function RegistrationFormEnhanced() {
 
           {/* Emergency Contacts */}
           <div className="card space-y-4">
-            <h3 className="font-heading text-xl font-bold text-white uppercase">Emergency Contacts</h3>
+            <h3 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase">Emergency Contacts</h3>
             
-            <div className="p-4 bg-gray-800/50 rounded space-y-3">
-              <p className="text-sm text-brand-primary font-medium">Emergency Contact 1 *</p>
-              <div className="grid md:grid-cols-3 gap-3">
-                <div>
-                  <input {...register('emergency1Name')} className="input-field" placeholder="Name" />
-                  {errors.emergency1Name && <p className="error-message">{errors.emergency1Name.message}</p>}
-                </div>
-                <div>
-                  <input type="tel" {...register('emergency1Phone')} className="input-field" placeholder="Phone" />
-                  {errors.emergency1Phone && <p className="error-message">{errors.emergency1Phone.message}</p>}
-                </div>
-                <div>
-                  <input {...register('emergency1Relationship')} className="input-field" placeholder="Relationship" />
-                  {errors.emergency1Relationship && <p className="error-message">{errors.emergency1Relationship.message}</p>}
-                </div>
+            <p className="text-sm text-brand-primary font-medium -mb-2">Emergency Contact 1 *</p>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Name *</label>
+                <input {...register('emergency1Name')} className="input-field" />
+                {errors.emergency1Name && <p className="error-message">{errors.emergency1Name.message}</p>}
+              </div>
+              <div>
+                <label className="label">Phone *</label>
+                <input type="tel" {...register('emergency1Phone')} className="input-field" />
+                {errors.emergency1Phone && <p className="error-message">{errors.emergency1Phone.message}</p>}
+              </div>
+              <div>
+                <label className="label">Relationship *</label>
+                <input {...register('emergency1Relationship')} className="input-field" placeholder="e.g., Father" />
+                {errors.emergency1Relationship && <p className="error-message">{errors.emergency1Relationship.message}</p>}
               </div>
             </div>
 
-            <div className="p-4 bg-gray-800/30 rounded space-y-3">
-              <p className="text-sm text-gray-400 font-medium">Emergency Contact 2 (optional)</p>
-              <div className="grid md:grid-cols-3 gap-3">
-                <input {...register('emergency2Name')} className="input-field" placeholder="Name" />
-                <input type="tel" {...register('emergency2Phone')} className="input-field" placeholder="Phone" />
-                <input {...register('emergency2Relationship')} className="input-field" placeholder="Relationship" />
+            <p className="text-sm dark:text-gray-400 light:text-gray-600 font-medium -mb-2 pt-2">Emergency Contact 2 (optional)</p>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Name</label>
+                <input {...register('emergency2Name')} className="input-field" />
+              </div>
+              <div>
+                <label className="label">Phone</label>
+                <input type="tel" {...register('emergency2Phone')} className="input-field" />
+              </div>
+              <div>
+                <label className="label">Relationship</label>
+                <input {...register('emergency2Relationship')} className="input-field" placeholder="e.g., Mother" />
               </div>
             </div>
 
-            <div>
+            <div className="pt-2">
               <label className="label">Authorised Collectors</label>
-              <p className="text-gray-500 text-xs mb-2">People authorized to collect your child(ren)</p>
+              <p className="dark:text-gray-500 light:text-gray-500 text-xs mb-2">People authorized to collect your child(ren)</p>
               <textarea {...register('authorisedCollectors')} className="input-field resize-none" rows={2} />
             </div>
           </div>
@@ -727,10 +735,10 @@ export default function RegistrationFormEnhanced() {
           {/* Pricing Items */}
           {campPricingItems.length > 0 && (
             <div className="card">
-              <h3 className="font-heading text-xl font-bold text-white uppercase mb-4">
+              <h3 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase mb-4">
                 Pricing Options
               </h3>
-              <p className="text-gray-400 text-sm mb-4">
+              <p className="dark:text-gray-400 light:text-gray-600 text-sm mb-4">
                 Prices are per child × {fields.length} {fields.length === 1 ? 'child' : 'children'}
               </p>
               <div className="space-y-2">
@@ -740,7 +748,7 @@ export default function RegistrationFormEnhanced() {
                     className={`flex items-start gap-3 p-3 rounded border transition-all ${
                       item.isRequired 
                         ? 'border-brand-primary/30 bg-brand-primary/5 cursor-default' 
-                        : 'border-gray-700 hover:border-brand-primary/50 cursor-pointer'
+                        : 'dark:border-gray-700 light:border-gray-300 hover:border-brand-primary/50 cursor-pointer'
                     }`}
                   >
                     <input
@@ -755,7 +763,7 @@ export default function RegistrationFormEnhanced() {
                       className={`mt-1 ${item.isRequired ? 'opacity-60' : ''}`}
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-white flex items-center gap-2">
+                      <div className="font-medium dark:text-white light:text-gray-900 flex items-center gap-2">
                         {item.name}
                         {item.isRequired && (
                           <span className="text-xs px-2 py-0.5 rounded bg-brand-primary/20 text-brand-primary">
@@ -763,21 +771,21 @@ export default function RegistrationFormEnhanced() {
                           </span>
                         )}
                       </div>
-                      <div className="text-sm text-gray-400">{item.description}</div>
+                      <div className="text-sm dark:text-gray-400 light:text-gray-600">{item.description}</div>
                     </div>
-                    <div className={`font-bold ${item.amount < 0 ? 'text-green-400' : 'text-white'}`}>
+                    <div className={`font-bold ${item.amount < 0 ? 'text-green-400' : 'dark:text-white light:text-gray-900'}`}>
                       {item.amount < 0 ? '-' : ''}AED {Math.abs(item.amount).toFixed(2)}
                     </div>
                   </label>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
+              <div className="mt-4 pt-4 border-t dark:border-gray-700 light:border-gray-300 space-y-2">
                 {siblingDiscount > 0 && (
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">
+                    <span className="dark:text-gray-400 light:text-gray-600">
                       Subtotal ({fields.length} children):
                     </span>
-                    <span className="text-gray-400">
+                    <span className="dark:text-gray-400 light:text-gray-600">
                       AED {(totalAmount + siblingDiscount).toFixed(2)}
                     </span>
                   </div>
@@ -793,7 +801,7 @@ export default function RegistrationFormEnhanced() {
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-2">
-                  <span className="text-white font-medium">
+                  <span className="dark:text-white light:text-gray-900 font-medium">
                     Total:
                   </span>
                   <span className="font-heading text-2xl font-bold text-brand-primary">
@@ -806,57 +814,57 @@ export default function RegistrationFormEnhanced() {
 
           {/* Permissions */}
           <div className="card space-y-3">
-            <h3 className="font-heading text-xl font-bold text-white uppercase mb-2">
+            <h3 className="font-heading text-xl font-bold dark:text-white light:text-gray-900 uppercase mb-2">
               Permissions & Consent
             </h3>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="dark:text-gray-400 light:text-gray-600 text-sm mb-4">
               These permissions apply to all registered children
             </p>
             
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionPhotos')} className="mt-1" />
-              <span className="text-gray-300">I give permission for my child(ren) to be photographed/videoed *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for my child(ren) to be photographed/videoed *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionHealth')} className="mt-1" />
-              <span className="text-gray-300">I authorize staff to seek emergency medical treatment if required *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I authorize staff to seek emergency medical treatment if required *</span>
             </label>
             {errors.permissionHealth && <p className="error-message">{errors.permissionHealth.message}</p>}
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionActivities')} className="mt-1" />
-              <span className="text-gray-300">I give permission for my child(ren) to participate in all camp activities *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for my child(ren) to participate in all camp activities *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionLocations')} className="mt-1" />
-              <span className="text-gray-300">I give permission for my child(ren) to visit off-site locations with supervision *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for my child(ren) to visit off-site locations with supervision *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionMeals')} className="mt-1" />
-              <span className="text-gray-300">I give permission for my child(ren) to have snacks and meals provided *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for my child(ren) to have snacks and meals provided *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionBathroom')} className="mt-1" />
-              <span className="text-gray-300">I give permission for my child(ren) to use bathroom facilities independently *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for my child(ren) to use bathroom facilities independently *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionFirstAid')} className="mt-1" />
-              <span className="text-gray-300">I give permission for first aid to be administered if needed *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for first aid to be administered if needed *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionEquipment')} className="mt-1" />
-              <span className="text-gray-300">I give permission for my child(ren) to use sports equipment and facilities *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I give permission for my child(ren) to use sports equipment and facilities *</span>
             </label>
 
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" {...register('permissionAppWaiver')} className="mt-1" />
-              <span className="text-gray-300">I acknowledge and accept the camp terms and conditions *</span>
+              <span className="dark:text-gray-300 light:text-gray-700">I acknowledge and accept the camp terms and conditions *</span>
             </label>
             {errors.permissionAppWaiver && <p className="error-message">{errors.permissionAppWaiver.message}</p>}
           </div>
@@ -914,7 +922,7 @@ function ChildSection({
   const hasFurtherInfo = watch(`children.${index}.hasFurtherInfo`)
 
   return (
-    <div className="mb-6 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+    <div className="mb-6 p-4 dark:bg-gray-800/50 light:bg-gray-100 rounded-lg border dark:border-gray-700 light:border-gray-300">
       <div className="flex justify-between items-center mb-4">
         <h4 className="font-heading text-lg text-brand-primary">
           Child {index + 1}
@@ -951,11 +959,11 @@ function ChildSection({
         <div>
           <label className="label">Can walk home alone? *</label>
           <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.walkHomeAlone`)} value="yes" />
               Yes
             </label>
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.walkHomeAlone`)} value="no" />
               No
             </label>
@@ -966,11 +974,11 @@ function ChildSection({
         <div>
           <label className="label">Any medical conditions? *</label>
           <div className="flex gap-4 mb-2">
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasMedicalConditions`)} value="yes" />
               Yes
             </label>
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasMedicalConditions`)} value="no" />
               No
             </label>
@@ -989,11 +997,11 @@ function ChildSection({
         <div>
           <label className="label">Any additional needs? *</label>
           <div className="flex gap-4 mb-2">
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasAdditionalNeeds`)} value="yes" />
               Yes
             </label>
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasAdditionalNeeds`)} value="no" />
               No
             </label>
@@ -1012,11 +1020,11 @@ function ChildSection({
         <div>
           <label className="label">Any allergies? *</label>
           <div className="flex gap-4 mb-2">
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasAllergies`)} value="yes" />
               Yes
             </label>
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasAllergies`)} value="no" />
               No
             </label>
@@ -1035,11 +1043,11 @@ function ChildSection({
         <div>
           <label className="label">Taking any medication? *</label>
           <div className="flex gap-4 mb-2">
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasMedication`)} value="yes" />
               Yes
             </label>
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasMedication`)} value="no" />
               No
             </label>
@@ -1058,11 +1066,11 @@ function ChildSection({
         <div>
           <label className="label">Any further information? *</label>
           <div className="flex gap-4 mb-2">
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasFurtherInfo`)} value="yes" />
               Yes
             </label>
-            <label className="flex items-center gap-2 text-white text-sm">
+            <label className="flex items-center gap-2 dark:text-white light:text-gray-900 text-sm">
               <input type="radio" {...register(`children.${index}.hasFurtherInfo`)} value="no" />
               No
             </label>
@@ -1157,17 +1165,17 @@ function PaymentForm({
         </button>
       </div>
 
-      <h2 className="font-heading text-2xl font-bold text-white uppercase mb-6">
+      <h2 className="font-heading text-2xl font-bold dark:text-white light:text-gray-900 uppercase mb-6">
         Complete Payment
       </h2>
 
-      <div className="bg-gray-800/50 p-4 rounded mb-6">
+      <div className="dark:bg-gray-800/50 light:bg-gray-100 p-4 rounded mb-6">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-gray-400">Registering:</span>
-          <span className="text-white">{childCount} {childCount === 1 ? 'child' : 'children'}</span>
+          <span className="dark:text-gray-400 light:text-gray-600">Registering:</span>
+          <span className="dark:text-white light:text-gray-900">{childCount} {childCount === 1 ? 'child' : 'children'}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-gray-400">Total Amount:</span>
+          <span className="dark:text-gray-400 light:text-gray-600">Total Amount:</span>
           <span className="text-2xl font-bold text-brand-primary">AED {totalAmount.toFixed(2)}</span>
         </div>
       </div>
@@ -1192,7 +1200,7 @@ function PaymentForm({
         </button>
       </form>
 
-      <p className="text-gray-400 text-xs text-center mt-4">
+      <p className="dark:text-gray-400 light:text-gray-600 text-xs text-center mt-4">
         Payments are securely processed by Stripe
       </p>
     </div>
